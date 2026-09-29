@@ -14,12 +14,14 @@ export interface PatientEncounter {
   id: string;
   patientIdentifier: string; // e.g. "Bed 4 - Smith, J." or "Pt #8832"
   group?: string;            // Patient group / ward / room block e.g. "ICU", "Cardiology Ward", "Emergency"
+  folderId?: string;         // Folder classification ID
   age?: string;
   sex?: 'M' | 'F' | 'Other';
   bedNumber?: string;
   chiefComplaint: string;
   status: 'active' | 'archived'; // Active for current bedside rounds, Archived for discharged/completed
   archivedAt?: number;       // Timestamp when encounter was archived
+  pagesCount?: number;       // Number of pages in full handwriting mode (default 1)
   templateId?: string;       // Originating ClinicalTemplate bundle ID (if instantiated from template)
   templateTitle?: string;    // Name of template used (e.g. "Acute Coronary Syndrome Admission")
   checklists: EncounterChecklistInstance[]; // Modular checklists attached to this patient

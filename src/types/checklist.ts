@@ -9,6 +9,10 @@ export interface MedicalImage {
   id: string;
   url: string; // Base64 data URL or external URL
   caption?: string;
+  tags?: string[]; // e.g. ["ecg", "stemi", "wound", "xray"]
+  category?: 'ecg' | 'wound' | 'rash' | 'xray' | 'ultrasound' | 'lab' | 'other';
+  patientId?: string;
+  patientIdentifier?: string;
   timestamp: number;
 }
 

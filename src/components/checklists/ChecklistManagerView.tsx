@@ -7,6 +7,7 @@ interface ChecklistManagerViewProps {
   checklists: Checklist[];
   onOpenEditor: (checklist: Checklist) => void;
   onCreateChecklist: () => void;
+  onDuplicateChecklist?: (checklist: Checklist) => void;
   onTogglePin: (checklistId: string) => void;
   onDeleteChecklist: (checklistId: string) => void;
   onInstantiateInEncounter?: (checklist: Checklist) => void;
@@ -17,6 +18,7 @@ export const ChecklistManagerView: React.FC<ChecklistManagerViewProps> = ({
   checklists,
   onOpenEditor,
   onCreateChecklist,
+  onDuplicateChecklist,
   onTogglePin,
   onDeleteChecklist,
   onInstantiateInEncounter,
@@ -149,6 +151,15 @@ export const ChecklistManagerView: React.FC<ChecklistManagerViewProps> = ({
           >
             <Edit className="w-4 h-4" />
           </button>
+          {onDuplicateChecklist && (
+            <button
+              onClick={() => onDuplicateChecklist(c)}
+              className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              title="Duplicate / Copy this Checklist"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={() => handleCopyMarkdown(c)}
             className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"

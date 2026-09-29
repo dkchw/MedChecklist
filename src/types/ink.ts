@@ -4,7 +4,7 @@ export interface StrokePoint {
   pressure?: number;
 }
 
-export type PenTool = 'pen' | 'highlighter' | 'eraser';
+export type PenTool = 'pen' | 'highlighter' | 'eraser' | 'selector';
 
 export interface InkStroke {
   id: string;
@@ -14,6 +14,7 @@ export interface InkStroke {
   tool: PenTool;
   opacity?: number;
   targetItemId?: string; // Optional anchor to a specific symptom or item
+  pageIndex?: number;    // Multi-page handwriting support (0-indexed)
   timestamp: number;
 }
 
@@ -22,6 +23,8 @@ export interface PenSettings {
   color: string;
   size: number;
 }
+
+export type InputMode = 'keyboard' | 'box_handwriting' | 'full_handwriting';
 
 export const PRESET_PEN_COLORS = [
   { name: 'Clinical White', value: '#f8fafc' },

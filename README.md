@@ -53,12 +53,38 @@ A minimalist, high-performance, clinical-grade medical checklist and patient enc
   - `### Bedside & Handwritten Notes (Editable MD)` — keyboard-editable Markdown notes that can also be annotated with pen!
 - Fully interoperable with Obsidian, Neovim, VSCode, and Git.
 
-### ✍️ Bedside Patient-Facing & Pen/Tablet Mode
+### 📁 Folders & Reconfigurable Workspace Tabs
+- **Folder Categorization**: Create custom colored folders to organize patients, checklists, and clinical templates into wards, specialties, or projects.
+- **Customizable Workspace Tabs**:
+  - Add new tabs (`+`), close inactive tabs (`x`), rename tabs with inline double-click editing, and reorder tabs left/right (`<` and `>`).
+  - Seamlessly switch between Bedside Encounters, Checklists, Template Bundles, Vault, P2P Sync, and Folders.
+
+### ✍️ 3 Clinical Input Modes & Offline Handwriting OCR
+- **Mode 1: Keyboard Only**: Distraction-free Markdown keyboard typing for detailed discharge notes and history.
+- **Mode 2: Handwriting In Box (Field OCR)**:
+  - Tap any vital sign box (Blood Pressure, Heart Rate, Respiratory Rate, Temp, SpO2), lab field, or Chief Complaint box to open an inline handwriting scratchpad.
+  - Built-in **100% offline client-side digit and vitals OCR engine** recognizes numbers, decimals, and blood pressure patterns (`120/80`) with live confidence scoring and 1-click apply.
+- **Mode 3: Full Handwriting Bedside Canvas**:
+  - **Multi-Page Bedside Sheets**: Add additional pages (`+ Add Page`), navigate pages (`Page X of Y`), and delete sheets.
+  - **4-Direction Infinite Canvas Expansion**: Expand canvas margins in any direction (Top ↑, Bottom ↓, Left ←, Right →).
+  - **Dual-Layer Architecture**: The underlying clinical document displays live, selectable, and copyable text (`Select Text` mode). Adding or modifying keyboard text updates the background without erasing or shifting your handwritten ink layer.
+  - **Selector / Lasso Tool**: Circle strokes with the lasso selector to translate/move, duplicate, or delete handwritten notes.
+  - **Multi-Format Exports**: Export multi-page handwriting dossiers directly to high-res PNG images or multi-page searchable clinical PDF (`jsPDF`).
+  - **Default Viewer Mode Export**: Clean clinical Markdown report maintaining exact keyboard text and numbers while separating scratch drawings.
+
+### 🖼️ Medical Image Gallery & Multi-Tagging
+- **Clinical Image Gallery**: Dedicated gallery modal showcasing attached ECGs, bedside ultrasounds, lab printouts, and wound photos.
+- **Granular Tagging**: Tag images with clinical labels (`#ecg`, `#stemi`, `#rash`, `#wound`, `#ultrasound`) and tag patients (`#critical`, `#admit`, `#pre-op`, `#stable`). Filter images by patient or tag instantly.
+
+### 📋 Rapid Checklist Duplication
+- **1-Click Duplication**: Duplicate checklists instantly inside active patient encounters or in the master checklist library with automatic timestamping and preserved formatting.
+
+### ✍️ Bedside Patient-Facing & Pen/Stylus Mode
 - Designed for Android tablets (Samsung S-Pen, active stylus, USI pen) and desktop touchscreens:
   - **Fluid Vector Inking**: Sub-10ms response time powered by `perfect-freehand`.
   - **Hardware Pressure Sensitivity**: Dynamic stroke thickness reacting to physical pen pressure (`PointerEvent.pressure`).
   - **Palm Rejection Friendly**: Distinct pointer handling between pen gestures and palm touches.
-  - **Minimal Floating Stylus Bar**: Ballpoint pen (Clinical Black, Medical Blue, Red, Amber, Green), Fluorescent Highlighter (Semi-transparent Yellow, Mint, Cyan), Stroke Eraser, Undo/Redo stack.
+  - **Minimal Floating Stylus Bar**: Ballpoint pen (Clinical Black, Medical Blue, Red, Amber, Green), Fluorescent Highlighter (Semi-transparent Yellow, Mint, Cyan), Lasso Selector, Stroke Eraser, Undo/Redo stack.
   - **Direct Ticking & Margin Scratchpad**: Tap or tick across symptoms with the pen, or write bedside margin notes.
   - **Quick Add Symptom**: Write or type unlisted symptoms on the fly directly at the bedside.
 

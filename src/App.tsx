@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './db/db';
-import { Checklist, Folder } from './types/checklist';
+import { Checklist } from './types/checklist';
 import { ClinicalTemplate } from './types/template';
 import { PatientEncounter, EncounterChecklistInstance } from './types/patient';
+import { WorkspaceTab, FolderItem, DEFAULT_TABS, TabType } from './types/tab';
 import { Header } from './components/common/Header';
 import { SearchModal } from './components/common/SearchModal';
 import { SyncModal } from './components/sync/SyncModal';
 import { LlmModal } from './components/llm/LlmModal';
+import { FolderModal } from './components/common/FolderModal';
 import { ChecklistManagerView } from './components/checklists/ChecklistManagerView';
 import { ChecklistEditorModal } from './components/checklists/ChecklistEditorModal';
 import { TemplateManagerView } from './components/templates/TemplateManagerView';
@@ -15,6 +17,7 @@ import { PatientEncounterView } from './components/patient/PatientEncounterView'
 import { PatientFacingMode } from './components/patient/PatientFacingMode';
 import { NewPatientModal } from './components/patient/NewPatientModal';
 import { VaultModal } from './components/security/VaultModal';
+import { ImageGalleryModal } from './components/patient/ImageGalleryModal';
 import { P2PSyncService } from './utils/p2pSync';
 import { cryptoVault } from './utils/cryptoVault';
 import { checkForGitHubUpdate, UpdateCheckResult } from './utils/githubUpdater';
@@ -22,12 +25,15 @@ import { UpdateBanner } from './components/common/UpdateBanner';
 import { getInitialTheme, applyTheme, ThemeMode } from './utils/theme';
 
 export function App() {
-  const [currentTab, setCurrentTab] = useState<'encounters' | 'checklists' | 'templates'>('encounters');
+  // Customizable Tabs State
+  const [tabs, setTabs] = useState<WorkspaceTab[]>(DEFAULT_TABS);
+  const [activeTabId, setActiveTabId] = useState<string>('tab-encounters');
+
   const [themeMode, setThemeMode] = useState<ThemeMode>(getInitialTheme());
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [clinicalTemplates, setClinicalTemplates] = useState<ClinicalTemplate[]>([]);
   const [encounters, setEncounters] = useState<PatientEncounter[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folders, setFolders] = useState<FolderItem[]>([]);
   const [selectedEncounterId, setSelectedEncounterId] = useState<string | null>(null);
 
   // Security & Vault State
@@ -39,6 +45,8 @@ export function App() {
   const [showSearchModal, setShowSearchModal] = useState<boolean>(false);
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   const [showNewPatientModal, setShowNewPatientModal] = useState<boolean>(false);
+  const [showFolderModal, setShowFolderModal] = useState<boolean>(false);
+  const [showGalleryModal, setShowGalleryModal] = useState<boolean>(false);
 
   const [editingChecklist, setEditingChecklist] = useState<Checklist | null>(null);
   const [editingClinicalTemplate, setEditingClinicalTemplate] = useState<ClinicalTemplate | null>(null);
@@ -53,13 +61,21 @@ export function App() {
     const chks = await db.checklists.toArray();
     const tmpls = await db.clinicalTemplates.toArray();
     const encs = await db.encounters.toArray();
-    const flds = await db.folders.orderBy('order').toArray();
+    const flds = (await db.folders.orderBy('order').toArray()) as any;
 
     setChecklists(chks);
     setClinicalTemplates(tmpls);
     setEncounters(encs);
-    setFolders(flds);
+    setFolders(flds || []);
     setIsVaultLocked(cryptoVault.isVaultLocked());
+
+    // Load saved tabs
+    try {
+      const savedTabs = await db.settings.get('workspace_tabs');
+      if (savedTabs && savedTabs.value && savedTabs.value.length > 0) {
+        setTabs(savedTabs.value);
+      }
+    } catch {}
 
     if (!selectedEncounterId && encs.length > 0) {
       const firstActive = encs.find((e) => !e.isDeleted && e.status === 'active') || encs.find((e) => !e.isDeleted);
@@ -99,6 +115,81 @@ export function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Workspace Tabs Management
+  const handleAddTab = async (title: string, type: TabType) => {
+    const newTab: WorkspaceTab = {
+      id: 'tab-' + Date.now(),
+      title,
+      type,
+      isClosable: true,
+      order: tabs.length,
+    };
+    const updated = [...tabs, newTab];
+    setTabs(updated);
+    setActiveTabId(newTab.id);
+    await db.settings.put({ key: 'workspace_tabs', value: updated });
+  };
+
+  const handleRemoveTab = async (tabId: string) => {
+    if (tabs.length <= 1) return;
+    const updated = tabs.filter((t) => t.id !== tabId);
+    setTabs(updated);
+    if (activeTabId === tabId) {
+      setActiveTabId(updated[0].id);
+    }
+    await db.settings.put({ key: 'workspace_tabs', value: updated });
+  };
+
+  const handleRenameTab = async (tabId: string, newTitle: string) => {
+    const updated = tabs.map((t) => (t.id === tabId ? { ...t, title: newTitle } : t));
+    setTabs(updated);
+    await db.settings.put({ key: 'workspace_tabs', value: updated });
+  };
+
+  const handleReorderTabs = async (newTabs: WorkspaceTab[]) => {
+    const reindexed = newTabs.map((t, idx) => ({ ...t, order: idx }));
+    setTabs(reindexed);
+    await db.settings.put({ key: 'workspace_tabs', value: reindexed });
+  };
+
+  // Folder Management Handlers
+  const handleCreateFolder = async (
+    name: string,
+    type: 'patient' | 'checklist' | 'template',
+    color?: string
+  ) => {
+    const newFolder: any = {
+      id: 'fld-' + Date.now(),
+      name,
+      type,
+      color: color || '#6366f1',
+      order: folders.length,
+    };
+    await db.folders.put(newFolder);
+    await refreshData();
+  };
+
+  const handleRenameFolder = async (id: string, newName: string) => {
+    const f = folders.find((fld) => fld.id === id);
+    if (f) {
+      await db.folders.put({ ...f, name: newName } as any);
+      await refreshData();
+    }
+  };
+
+  const handleDeleteFolder = async (id: string) => {
+    await db.folders.delete(id);
+    await refreshData();
+  };
+
+  const handleAssignEncounterToFolder = async (encounterId: string, folderId?: string) => {
+    const enc = encounters.find((e) => e.id === encounterId);
+    if (enc) {
+      await db.encounters.put({ ...enc, folderId, updatedAt: Date.now() });
+      await refreshData();
+    }
+  };
+
   // Update Encounter
   const handleUpdateEncounter = async (updated: PatientEncounter) => {
     await db.encounters.put(updated);
@@ -118,7 +209,7 @@ export function App() {
   const handleCreateEncounter = async (newEnc: PatientEncounter) => {
     await db.encounters.put(newEnc);
     setSelectedEncounterId(newEnc.id);
-    setCurrentTab('encounters');
+    setActiveTabId('tab-encounters');
     await refreshData();
   };
 
@@ -141,6 +232,17 @@ export function App() {
     if (!chk) return;
     const updated = { ...chk, isPinned: !chk.isPinned, updatedAt: Date.now() };
     await db.checklists.put(updated);
+    await refreshData();
+  };
+
+  const handleDuplicateChecklist = async (chk: Checklist) => {
+    const cloned: Checklist = {
+      ...JSON.parse(JSON.stringify(chk)),
+      id: 'chk-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      title: `${chk.title} (Copy)`,
+      updatedAt: Date.now(),
+    };
+    await db.checklists.put(cloned);
     await refreshData();
   };
 
@@ -172,7 +274,7 @@ export function App() {
 
     await handleUpdateEncounter(updated);
     setSelectedEncounterId(target.id);
-    setCurrentTab('encounters');
+    setActiveTabId('tab-encounters');
   };
 
   // Clinical Template Actions
@@ -255,6 +357,9 @@ export function App() {
     );
   }
 
+  // Active Tab Type
+  const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0] || DEFAULT_TABS[0];
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
       {updateInfo && updateInfo.hasUpdate && (
@@ -262,8 +367,14 @@ export function App() {
       )}
 
       <Header
-        currentTab={currentTab}
-        onSelectTab={setCurrentTab}
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onSelectTab={setActiveTabId}
+        onAddTab={handleAddTab}
+        onRemoveTab={handleRemoveTab}
+        onRenameTab={handleRenameTab}
+        onReorderTabs={handleReorderTabs}
+        onOpenFolders={() => setShowFolderModal(true)}
         onOpenSearch={() => setShowSearchModal(true)}
         onOpenSync={() => setShowSyncModal(true)}
         onOpenVault={() => setShowVaultModal(true)}
@@ -275,7 +386,7 @@ export function App() {
       />
 
       <main className="flex-1">
-        {currentTab === 'encounters' && (
+        {activeTab.type === 'encounters' && (
           <PatientEncounterView
             encounters={encounters}
             selectedEncounterId={selectedEncounterId}
@@ -292,10 +403,11 @@ export function App() {
               if (chk) setEditingChecklist(chk);
             }}
             onDeleteEncounter={handleDeleteEncounter}
+            onOpenGallery={() => setShowGalleryModal(true)}
           />
         )}
 
-        {currentTab === 'checklists' && (
+        {activeTab.type === 'checklists' && (
           <ChecklistManagerView
             checklists={checklists}
             onOpenEditor={(chk) => setEditingChecklist(chk)}
@@ -317,6 +429,7 @@ export function App() {
               };
               setEditingChecklist(newChk);
             }}
+            onDuplicateChecklist={handleDuplicateChecklist}
             onTogglePin={handleTogglePinChecklist}
             onDeleteChecklist={handleDeleteChecklist}
             onInstantiateInEncounter={handleAddChecklistToActivePatient}
@@ -324,7 +437,7 @@ export function App() {
           />
         )}
 
-        {currentTab === 'templates' && (
+        {activeTab.type === 'templates' && (
           <TemplateManagerView
             templates={clinicalTemplates}
             availableChecklists={checklists}
@@ -337,7 +450,8 @@ export function App() {
                 category: 'General',
                 tags: ['bundle'],
                 checklistIds: [],
-                protocolNotes: '### Standard Ward Guidance:\n- Step 1: Initial assessment\n- Step 2: Handoff protocol',
+                protocolNotes:
+                  '### Standard Ward Guidance:\n- Step 1: Initial assessment\n- Step 2: Handoff protocol',
                 updatedAt: Date.now(),
               };
               setEditingClinicalTemplate(newTmpl);
@@ -346,6 +460,17 @@ export function App() {
             onDeleteTemplate={handleDeleteClinicalTemplate}
             onApplyTemplateToPatient={handleApplyClinicalTemplateToPatient}
           />
+        )}
+
+        {activeTab.type === 'gallery' && (
+          <div className="max-w-7xl mx-auto p-4 sm:p-6">
+            <ImageGalleryModal
+              encounters={encounters}
+              selectedEncounterId={selectedEncounterId}
+              onUpdateEncounter={handleUpdateEncounter}
+              onClose={() => setActiveTabId(tabs[0].id)}
+            />
+          </div>
         )}
       </main>
 
@@ -359,19 +484,19 @@ export function App() {
             const chk = checklists.find((c) => c.id === chkId);
             if (chk) {
               setEditingChecklist(chk);
-              setCurrentTab('checklists');
+              setActiveTabId('tab-checklists');
             }
           }}
           onSelectTemplate={(tmplId) => {
             const tmpl = clinicalTemplates.find((t) => t.id === tmplId);
             if (tmpl) {
               setEditingClinicalTemplate(tmpl);
-              setCurrentTab('templates');
+              setActiveTabId('tab-templates');
             }
           }}
           onSelectEncounter={(encId) => {
             setSelectedEncounterId(encId);
-            setCurrentTab('encounters');
+            setActiveTabId('tab-encounters');
           }}
           onClose={() => setShowSearchModal(false)}
         />
@@ -395,6 +520,27 @@ export function App() {
             setIsVaultLocked(cryptoVault.isVaultLocked());
           }}
           onVaultStateChanged={refreshData}
+        />
+      )}
+
+      {showFolderModal && (
+        <FolderModal
+          folders={folders}
+          encounters={encounters}
+          onCreateFolder={handleCreateFolder}
+          onRenameFolder={handleRenameFolder}
+          onDeleteFolder={handleDeleteFolder}
+          onAssignEncounterToFolder={handleAssignEncounterToFolder}
+          onClose={() => setShowFolderModal(false)}
+        />
+      )}
+
+      {showGalleryModal && (
+        <ImageGalleryModal
+          encounters={encounters}
+          selectedEncounterId={selectedEncounterId}
+          onUpdateEncounter={handleUpdateEncounter}
+          onClose={() => setShowGalleryModal(false)}
         />
       )}
 
