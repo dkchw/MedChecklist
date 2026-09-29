@@ -1,3 +1,17 @@
+export interface MedicalLink {
+  id: string;
+  title: string;
+  url: string;
+  category?: 'uptodate' | 'pubmed' | 'wiki' | 'youtube' | 'general';
+}
+
+export interface MedicalImage {
+  id: string;
+  url: string; // Base64 data URL or external URL
+  caption?: string;
+  timestamp: number;
+}
+
 export interface ChecklistItem {
   id: string;
   text: string;
@@ -9,6 +23,8 @@ export interface ChecklistItem {
   labValue?: string;        // Patient recorded value e.g. "131 (Low)"
   unit?: string;            // e.g. "mEq/L", "mg/dL"
   order?: number;
+  images?: MedicalImage[];
+  links?: MedicalLink[];
 }
 
 export interface ChecklistSection {
@@ -30,6 +46,7 @@ export interface ChecklistTemplate {
   isCustom?: boolean; // user-created/modified
   updatedAt: number;
   isDeleted?: boolean; // soft delete for conflict prevention
+  links?: MedicalLink[];
 }
 
 export interface Folder {

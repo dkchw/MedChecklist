@@ -12,6 +12,8 @@ import { PatientEncounterView } from './components/patient/PatientEncounterView'
 import { PatientFacingMode } from './components/patient/PatientFacingMode';
 import { NewPatientModal } from './components/patient/NewPatientModal';
 import { P2PSyncService } from './utils/p2pSync';
+import { checkForGitHubUpdate, UpdateCheckResult } from './utils/githubUpdater';
+import { UpdateBanner } from './components/common/UpdateBanner';
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<'encounters' | 'templates'>('encounters');
@@ -26,6 +28,7 @@ export function App() {
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   const [showNewPatientModal, setShowNewPatientModal] = useState<boolean>(false);
   const [editingTemplate, setEditingTemplate] = useState<ChecklistTemplate | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [llmTarget, setLlmTarget] = useState<{
     encounter?: PatientEncounter;
     template?: ChecklistTemplate;
@@ -49,6 +52,11 @@ export function App() {
 
   useEffect(() => {
     refreshData();
+    checkForGitHubUpdate('dkchw', 'MedChecklist').then((res) => {
+      if (res && res.hasUpdate) {
+        setUpdateInfo(res);
+      }
+    });
   }, []);
 
   // Keyboard shortcut for search (⌘K or Ctrl+K)
@@ -217,6 +225,13 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+      {updateInfo && updateInfo.hasUpdate && (
+        <UpdateBanner
+          updateInfo={updateInfo}
+          onDismiss={() => setUpdateInfo(null)}
+        />
+      )}
+
       <Header
         currentTab={currentTab}
         onSelectTab={setCurrentTab}

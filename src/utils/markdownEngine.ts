@@ -1,4 +1,4 @@
-import { ChecklistItem, ChecklistSection, ChecklistTemplate } from '../types/checklist';
+import { ChecklistItem, ChecklistSection, ChecklistTemplate, MedicalLink, MedicalImage } from '../types/checklist';
 import { PatientEncounter, EncounterChecklistInstance } from '../types/patient';
 
 /**
@@ -9,9 +9,11 @@ import { PatientEncounter, EncounterChecklistInstance } from '../types/patient';
  * - Starred items: `*starred*` or `⭐`
  * - Item notes: indented blockquote `  > Note: ...` or `  > ...`
  * - Reference / Lab bounds: `[Normal: ...]` or `[Ref: ...]`
+ * - Attached medical links: `[UpToDate: Title](url)`
+ * - Attached images: `![Caption](url)`
  * - Sections: `## Section Name`
  * - Encounter metadata: `> Patient: ... | Age: ... | Sex: ...`
- * - Handwritten/Bedside notes: `### Bedside & Handwritten Notes` with editable text
+ * - Handwritten/Bedside notes: `### Bedside & Handwritten Notes (Editable MD)`
  */
 
 export function templateToMarkdown(template: ChecklistTemplate): string {
@@ -25,6 +27,11 @@ export function templateToMarkdown(template: ChecklistTemplate): string {
   }
   if (template.tags && template.tags.length > 0) {
     lines.push(`> Tags: ${template.tags.map(t => t.startsWith('#') ? t : `#${t}`).join(' ')}`);
+  }
+
+  // Links
+  if (template.links && template.links.length > 0) {
+    lines.push(`> Reference Links: ${template.links.map(l => `[${l.title}](${l.url})`).join(' | ')}`);
   }
   lines.push('');
 
@@ -49,6 +56,16 @@ export function templateToMarkdown(template: ChecklistTemplate): string {
       lines.push(line);
       if (item.note) {
         lines.push(`  > Note: ${item.note}`);
+      }
+      if (item.links && item.links.length > 0) {
+        for (const l of item.links) {
+          lines.push(`  > Link: [${l.title}](${l.url})`);
+        }
+      }
+      if (item.images && item.images.length > 0) {
+        for (const img of item.images) {
+          lines.push(`  > ![${img.caption || 'Attached Image'}](${img.url})`);
+        }
       }
     }
     lines.push('');
@@ -77,6 +94,10 @@ export function encounterToMarkdown(encounter: PatientEncounter): string {
   if (encounter.tags && encounter.tags.length > 0) {
     lines.push(`> Tags: ${encounter.tags.map(t => t.startsWith('#') ? t : `#${t}`).join(' ')}`);
   }
+
+  if (encounter.links && encounter.links.length > 0) {
+    lines.push(`> Clinical References: ${encounter.links.map(l => `[${l.title}](${l.url})`).join(' | ')}`);
+  }
   lines.push('');
 
   for (const chk of encounter.checklists) {
@@ -102,9 +123,29 @@ export function encounterToMarkdown(encounter: PatientEncounter): string {
         if (item.note) {
           lines.push(`  > Note: ${item.note}`);
         }
+        if (item.links && item.links.length > 0) {
+          for (const l of item.links) {
+            lines.push(`  > Link: [${l.title}](${l.url})`);
+          }
+        }
+        if (item.images && item.images.length > 0) {
+          for (const img of item.images) {
+            lines.push(`  > ![${img.caption || 'Attached Image'}](${img.url})`);
+          }
+        }
       }
       lines.push('');
     }
+  }
+
+  // Attached images at encounter level
+  if (encounter.images && encounter.images.length > 0) {
+    lines.push(`---`);
+    lines.push(`### Attached Clinical Images`);
+    for (const img of encounter.images) {
+      lines.push(`![${img.caption || 'Clinical Snapshot'}](${img.url})`);
+    }
+    lines.push('');
   }
 
   if (encounter.generalNotes) {
@@ -125,6 +166,7 @@ export function parseMarkdownToChecklist(md: string): {
   description: string;
   institution?: string;
   tags: string[];
+  links: MedicalLink[];
   sections: ChecklistSection[];
   generalNotes?: string;
 } {
@@ -133,6 +175,7 @@ export function parseMarkdownToChecklist(md: string): {
   let description = '';
   let institution = '';
   const tags: string[] = [];
+  const links: MedicalLink[] = [];
   const sections: ChecklistSection[] = [];
   let currentSection: ChecklistSection | null = null;
   let currentItem: ChecklistItem | null = null;
@@ -159,6 +202,15 @@ export function parseMarkdownToChecklist(md: string): {
         tags.push(...tagTokens);
       } else if (meta.toLowerCase().startsWith('institution:')) {
         institution = meta.substring(12).trim();
+      } else if (meta.toLowerCase().includes('links:') || meta.toLowerCase().includes('references:')) {
+        const linkMatches = meta.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g);
+        for (const match of linkMatches) {
+          links.push({
+            id: 'link-' + Math.random().toString(36).substring(2, 7),
+            title: match[1],
+            url: match[2],
+          });
+        }
       } else if (!description) {
         description = meta;
       }
@@ -231,6 +283,8 @@ export function parseMarkdownToChecklist(md: string): {
         starred: isStarred,
         referenceValue: referenceValue || undefined,
         labValue: labValue || undefined,
+        images: [],
+        links: [],
       };
       currentSection.items.push(currentItem);
       continue;
@@ -252,13 +306,40 @@ export function parseMarkdownToChecklist(md: string): {
         id: 'item-' + Math.random().toString(36).substring(2, 9),
         text: bulletMatch[1].trim(),
         checked: false,
+        images: [],
+        links: [],
       };
       currentSection.items.push(currentItem);
       continue;
     }
 
-    // Note attached to previous item: > Note: ... or   > ...
+    // Note, Link, or Image attached to previous item
     if ((line.startsWith('>') || rawLine.startsWith('  >')) && currentItem) {
+      // Check for image ![caption](url)
+      const imgMatch = line.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+      if (imgMatch) {
+        if (!currentItem.images) currentItem.images = [];
+        currentItem.images.push({
+          id: 'img-' + Math.random().toString(36).substring(2, 7),
+          caption: imgMatch[1] || 'Attached Image',
+          url: imgMatch[2],
+          timestamp: Date.now(),
+        });
+        continue;
+      }
+
+      // Check for link [title](url)
+      const linkMatch = line.match(/\[([^\]]+)\]\(([^)]+)\)/);
+      if (linkMatch && line.toLowerCase().includes('link:')) {
+        if (!currentItem.links) currentItem.links = [];
+        currentItem.links.push({
+          id: 'link-' + Math.random().toString(36).substring(2, 7),
+          title: linkMatch[1],
+          url: linkMatch[2],
+        });
+        continue;
+      }
+
       const noteText = line.replace(/^>+\s*(?:Note:\s*)?/i, '').trim();
       currentItem.note = currentItem.note ? `${currentItem.note}\n${noteText}` : noteText;
       continue;
@@ -279,6 +360,7 @@ export function parseMarkdownToChecklist(md: string): {
     description,
     institution: institution || undefined,
     tags,
+    links,
     sections,
     generalNotes: notesLines.length > 0 ? notesLines.join('\n').trim() : undefined,
   };
@@ -306,11 +388,13 @@ You must format your checklist response in standard MedChecklist Markdown so the
      \`  > Note: Radiates to left jaw, lasted 45 minutes\`
 4. For labs with reference values, use \`[Normal: <range>]\` and optional recorded value:
    - \`- [x] High-Sensitivity Troponin: 154 ng/L [Normal: < 14 ng/L] *starred*\`
-5. Group items under Markdown headers (\`## Section Name\`).
-6. Place patient metadata at the top:
+5. For clinical reference links (UpToDate, PubMed, Guidelines):
+   - \`  > Link: [UpToDate: Acute Coronary Syndrome](https://www.uptodate.com/...)\`
+6. Group items under Markdown headers (\`## Section Name\`).
+7. Place patient metadata at the top:
    \`> Patient: [ID] | Age: [Age] | Sex: [M/F] | Complaint: [Complaint]\`
    \`> Tags: #cardiology #urgent\`
-7. Place any free-text clinical discussion, differential diagnoses, or bedside synthesis under:
+8. Place any free-text clinical discussion, differential diagnoses, or bedside synthesis under:
    \`### Bedside & Handwritten Notes (Editable MD)\`
 === END FORMATTING INSTRUCTIONS ===`;
 
@@ -320,14 +404,15 @@ You must format your checklist response in standard MedChecklist Markdown so the
 Review the following patient checklist and findings.
 1. Identify high-priority and positive findings (\`- [x]\`).
 2. Provide a prioritized differential diagnosis list under \`### Bedside & Handwritten Notes (Editable MD)\`.
-3. Add any crucial diagnostic workups, missing red-flag symptoms, or lab tests as uncompleted items (\`- [ ]\`) in appropriate sections.`;
+3. Add any crucial diagnostic workups, missing red-flag symptoms, or lab tests as uncompleted items (\`- [ ]\`) in appropriate sections.
+4. Include evidence-based reference links to UpToDate or PubMed where relevant.`;
   } else if (mode === 'soap') {
     taskInstruction = `### CLINICAL TASK:
 Synthesize the following checklist items into a structured clinical SOAP note (Subjective, Objective, Assessment, Plan).
 Keep items structured in MedChecklist markdown with \`- [x]\` and \`- [ ]\`, and place the narrative Assessment and Plan in the \`### Bedside & Handwritten Notes (Editable MD)\` section.`;
   } else if (mode === 'checklist_expansion') {
     taskInstruction = `### CLINICAL TASK:
-Expand the provided checklist into a comprehensive, evidence-based clinical protocol/checklist. Add necessary screening questions, laboratory tests with reference values, and procedural steps.`;
+Expand the provided checklist into a comprehensive, evidence-based clinical protocol/checklist. Add necessary screening questions, laboratory tests with reference values, procedural steps, and clinical reference links.`;
   } else {
     taskInstruction = `### CLINICAL TASK:
 ${customInstruction || 'Analyze the provided clinical checklist and update it with relevant findings, suggested additions, and clinical notes.'}`;

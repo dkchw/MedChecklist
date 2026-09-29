@@ -1,4 +1,4 @@
-import { ChecklistSection } from './checklist';
+import { ChecklistSection, MedicalImage, MedicalLink } from './checklist';
 import { InkStroke } from './ink';
 
 export interface EncounterChecklistInstance {
@@ -21,6 +21,8 @@ export interface PatientEncounter {
   checklists: EncounterChecklistInstance[];
   generalNotes?: string;
   inkStrokes?: InkStroke[]; // Bedside handwritten notes and drawings
+  images?: MedicalImage[];  // Attached clinical images (ECG, rashes, wounds, labs)
+  links?: MedicalLink[];    // Attached reference links (UpToDate, PubMed, Guidelines)
   tags: string[];
   createdAt: number;
   updatedAt: number;

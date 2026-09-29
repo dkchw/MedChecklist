@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PatientEncounter, EncounterChecklistInstance } from '../../types/patient';
-import { ChecklistTemplate } from '../../types/checklist';
+import { ChecklistTemplate, MedicalImage, MedicalLink } from '../../types/checklist';
 import { encounterToMarkdown } from '../../utils/markdownEngine';
 import {
   User,
@@ -18,9 +18,17 @@ import {
   ChevronRight,
   Archive,
   PenTool,
-  Sliders
+  Sliders,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  ExternalLink,
+  Maximize2,
+  Globe,
+  Video,
+  BookOpen
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { AttachModal } from '../common/AttachModal';
 
 interface PatientEncounterViewProps {
   encounters: PatientEncounter[];
@@ -50,6 +58,12 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
   const [copied, setCopied] = useState(false);
   const [activeNoteItemId, setActiveNoteItemId] = useState<string | null>(null);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [attachTarget, setAttachTarget] = useState<
+    | { type: 'encounter' }
+    | { type: 'item'; checklistIdx: number; sectionIdx: number; itemIdx: number }
+    | null
+  >(null);
+  const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null);
 
   const activeEncounters = encounters.filter((e) => !e.isDeleted);
   const currentEncounter =
@@ -63,6 +77,72 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {}
+  };
+
+  const handleAttachImage = (image: MedicalImage) => {
+    if (!currentEncounter || !attachTarget) return;
+    const updated = JSON.parse(JSON.stringify(currentEncounter)) as PatientEncounter;
+    if (attachTarget.type === 'encounter') {
+      if (!updated.images) updated.images = [];
+      updated.images.push(image);
+    } else {
+      const itm = updated.checklists[attachTarget.checklistIdx].sections[attachTarget.sectionIdx].items[attachTarget.itemIdx];
+      if (!itm.images) itm.images = [];
+      itm.images.push(image);
+    }
+    updated.updatedAt = Date.now();
+    onUpdateEncounter(updated);
+  };
+
+  const handleAttachLink = (link: MedicalLink) => {
+    if (!currentEncounter || !attachTarget) return;
+    const updated = JSON.parse(JSON.stringify(currentEncounter)) as PatientEncounter;
+    if (attachTarget.type === 'encounter') {
+      if (!updated.links) updated.links = [];
+      updated.links.push(link);
+    } else {
+      const itm = updated.checklists[attachTarget.checklistIdx].sections[attachTarget.sectionIdx].items[attachTarget.itemIdx];
+      if (!itm.links) itm.links = [];
+      itm.links.push(link);
+    }
+    updated.updatedAt = Date.now();
+    onUpdateEncounter(updated);
+  };
+
+  const handleAddItemToSection = (checklistIdx: number, sectionIdx: number) => {
+    if (!currentEncounter) return;
+    const updated = JSON.parse(JSON.stringify(currentEncounter)) as PatientEncounter;
+    const newItem = {
+      id: 'item-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      text: 'New Checklist Item (Click to edit)',
+      checked: false,
+    };
+    updated.checklists[checklistIdx].sections[sectionIdx].items.push(newItem);
+    updated.updatedAt = Date.now();
+    onUpdateEncounter(updated);
+  };
+
+  const handleUpdateItemText = (
+    checklistIdx: number,
+    sectionIdx: number,
+    itemIdx: number,
+    text: string
+  ) => {
+    if (!currentEncounter) return;
+    const updated = JSON.parse(JSON.stringify(currentEncounter)) as PatientEncounter;
+    updated.checklists[checklistIdx].sections[sectionIdx].items[itemIdx].text = text;
+    updated.updatedAt = Date.now();
+    onUpdateEncounter(updated);
+  };
+
+  const handleDeleteItem = (checklistIdx: number, sectionIdx: number, itemIdx: number) => {
+    if (!currentEncounter) return;
+    const updated = JSON.parse(JSON.stringify(currentEncounter)) as PatientEncounter;
+    updated.checklists[checklistIdx].sections[sectionIdx].items = updated.checklists[
+      checklistIdx
+    ].sections[sectionIdx].items.filter((_, idx) => idx !== itemIdx);
+    updated.updatedAt = Date.now();
+    onUpdateEncounter(updated);
   };
 
   const handleToggleItem = (checklistIdx: number, sectionIdx: number, itemIdx: number) => {
@@ -230,6 +310,56 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
               </span>
             )}
           </div>
+
+          {/* Attached Links on Encounter */}
+          {currentEncounter.links && currentEncounter.links.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+              {currentEncounter.links.map((lnk) => (
+                <a
+                  key={lnk.id}
+                  href={lnk.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-100 transition-colors"
+                >
+                  {lnk.category === 'youtube' ? (
+                    <Video className="w-3 h-3 text-rose-600" />
+                  ) : lnk.category === 'pubmed' ? (
+                    <FileText className="w-3 h-3 text-blue-600" />
+                  ) : lnk.category === 'wiki' ? (
+                    <Globe className="w-3 h-3 text-slate-600" />
+                  ) : (
+                    <BookOpen className="w-3 h-3 text-indigo-600" />
+                  )}
+                  <span>{lnk.title}</span>
+                  <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Attached Images Gallery on Encounter */}
+          {currentEncounter.images && currentEncounter.images.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              {currentEncounter.images.map((img) => (
+                <div
+                  key={img.id}
+                  onClick={() => setActiveLightboxImage(img.url)}
+                  className="group relative w-16 h-16 rounded-xl border border-slate-200 overflow-hidden cursor-pointer shadow-2xs hover:shadow-xs transition-all bg-slate-900"
+                >
+                  <img src={img.url} alt={img.caption || 'Clinical Snapshot'} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </div>
+                  {img.caption && (
+                    <div className="absolute bottom-0 inset-x-0 bg-black/60 text-[9px] text-white px-1 truncate">
+                      {img.caption}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Action Buttons */}
@@ -241,6 +371,16 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             <span>Bedside Mode (Pen / Stylus)</span>
+          </button>
+
+          {/* Attach Image / Snapshot */}
+          <button
+            onClick={() => setAttachTarget({ type: 'encounter' })}
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
+            title="Attach ECG, rash photo, wound snapshot or medical link"
+          >
+            <ImageIcon className="w-3.5 h-3.5 text-slate-600" />
+            <span>Attach Image / Link</span>
           </button>
 
           {/* Copy for LLM */}
@@ -430,24 +570,99 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                             </div>
                           )}
 
-                          {/* Note button */}
-                          <button
-                            onClick={() =>
-                              setActiveNoteItemId(
-                                activeNoteItemId === item.id ? null : item.id
-                              )
-                            }
-                            className={`p-1 rounded-lg text-xs flex items-center gap-1 transition-colors ${
-                              item.note
-                                ? 'text-indigo-600 bg-indigo-50 font-medium'
-                                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-                            }`}
-                            title="Add/Edit Markdown Note"
-                          >
-                            <MessageSquare className="w-3.5 h-3.5" />
-                            {item.note && <span className="text-[10px]">Note</span>}
-                          </button>
+                          {/* Item Actions */}
+                          <div className="flex items-center gap-1">
+                            {/* Note button */}
+                            <button
+                              onClick={() =>
+                                setActiveNoteItemId(
+                                  activeNoteItemId === item.id ? null : item.id
+                                )
+                              }
+                              className={`p-1 rounded-lg text-xs flex items-center gap-1 transition-colors ${
+                                item.note
+                                  ? 'text-indigo-600 bg-indigo-50 font-medium'
+                                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                              }`}
+                              title="Add/Edit Markdown Note"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              {item.note && <span className="text-[10px]">Note</span>}
+                            </button>
+
+                            {/* Attach media to item */}
+                            <button
+                              onClick={() =>
+                                setAttachTarget({
+                                  type: 'item',
+                                  checklistIdx: chkIdx,
+                                  sectionIdx: secIdx,
+                                  itemIdx: itmIdx,
+                                })
+                              }
+                              className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                              title="Attach image or link to this item"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Delete item */}
+                            <button
+                              onClick={() => handleDeleteItem(chkIdx, secIdx, itmIdx)}
+                              className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                              title="Delete Item"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
+
+                        {/* Attached Item Links */}
+                        {item.links && item.links.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2 pl-9">
+                            {item.links.map((lnk) => (
+                              <a
+                                key={lnk.id}
+                                href={lnk.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100 transition-colors"
+                              >
+                                {lnk.category === 'youtube' ? (
+                                  <Video className="w-3 h-3 text-rose-600" />
+                                ) : lnk.category === 'pubmed' ? (
+                                  <FileText className="w-3 h-3 text-blue-600" />
+                                ) : (
+                                  <Globe className="w-3 h-3 text-slate-600" />
+                                )}
+                                <span>{lnk.title}</span>
+                                <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Attached Item Images */}
+                        {item.images && item.images.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2 mt-2 pl-9">
+                            {item.images.map((img) => (
+                              <div
+                                key={img.id}
+                                onClick={() => setActiveLightboxImage(img.url)}
+                                className="group relative w-12 h-12 rounded-lg border border-slate-200 overflow-hidden cursor-pointer bg-slate-900"
+                              >
+                                <img
+                                  src={img.url}
+                                  alt={img.caption || 'Item snapshot'}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                />
+                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                  <Maximize2 className="w-3 h-3" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Inline Note Editor */}
                         {(activeNoteItemId === item.id || item.note) && (
@@ -471,6 +686,15 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                       </div>
                     ))}
                   </div>
+
+                  {/* Add Item Button for manual typing */}
+                  <button
+                    onClick={() => handleAddItemToSection(chkIdx, secIdx)}
+                    className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 flex items-center gap-1 pl-2 pt-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Item to {sec.title}</span>
+                  </button>
                 </div>
               ))}
             </div>
@@ -509,6 +733,37 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
           />
         </div>
       </div>
+
+      {/* Attach Modal */}
+      {attachTarget && (
+        <AttachModal
+          onAttachImage={handleAttachImage}
+          onAttachLink={handleAttachLink}
+          onClose={() => setAttachTarget(null)}
+        />
+      )}
+
+      {/* Lightbox Modal */}
+      {activeLightboxImage && (
+        <div
+          onClick={() => setActiveLightboxImage(null)}
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div className="relative max-w-4xl max-h-[90vh]">
+            <img
+              src={activeLightboxImage}
+              alt="Enlarged snapshot"
+              className="max-h-[85vh] max-w-full rounded-xl shadow-2xl object-contain"
+            />
+            <button
+              onClick={() => setActiveLightboxImage(null)}
+              className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-black text-white rounded-full"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
