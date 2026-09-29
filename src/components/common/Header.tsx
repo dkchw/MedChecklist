@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { ThemeMode } from '../../utils/theme';
 import { WorkspaceTab, TabType } from '../../types/tab';
+import { APP_VERSION } from '../../version';
 
 interface HeaderProps {
   tabs: WorkspaceTab[];
@@ -119,6 +120,9 @@ export const Header: React.FC<HeaderProps> = ({
               <span>MedChecklist</span>
               <span className="text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800">
                 MD-First
+              </span>
+              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded">
+                v{APP_VERSION}
               </span>
             </div>
           </div>

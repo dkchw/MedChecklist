@@ -1,12 +1,13 @@
 {
   "name": "med-checklist",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:apk": "./scripts/build_and_bump.sh"
   },
   "dependencies": {
     "@types/qrcode": "^1.5.6",

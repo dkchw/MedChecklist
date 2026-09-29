@@ -17,7 +17,9 @@ export interface UpdateCheckResult {
   assets: GitHubReleaseAsset[];
 }
 
-export const CURRENT_APP_VERSION = '1.0.0';
+import { APP_VERSION } from '../version';
+
+export const CURRENT_APP_VERSION = APP_VERSION;
 
 export async function checkForGitHubUpdate(
   repoOwner: string = 'dkchw',
