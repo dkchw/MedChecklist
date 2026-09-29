@@ -13,6 +13,14 @@ dist-ssr
 *.local
 *.tsbuildinfo
 
+# Android build outputs
+.gradle
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+*.apk
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
