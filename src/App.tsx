@@ -14,9 +14,11 @@ import { NewPatientModal } from './components/patient/NewPatientModal';
 import { P2PSyncService } from './utils/p2pSync';
 import { checkForGitHubUpdate, UpdateCheckResult } from './utils/githubUpdater';
 import { UpdateBanner } from './components/common/UpdateBanner';
+import { getInitialTheme, applyTheme, ThemeMode } from './utils/theme';
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<'encounters' | 'templates'>('encounters');
+  const [themeMode, setThemeMode] = useState<ThemeMode>(getInitialTheme());
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [encounters, setEncounters] = useState<PatientEncounter[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -48,6 +50,14 @@ export function App() {
       const firstActive = encs.find((e) => !e.isDeleted);
       if (firstActive) setSelectedEncounterId(firstActive.id);
     }
+  };
+
+  useEffect(() => {
+    applyTheme(themeMode);
+  }, [themeMode]);
+
+  const handleToggleTheme = () => {
+    setThemeMode((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
   useEffect(() => {
@@ -224,7 +234,7 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
       {updateInfo && updateInfo.hasUpdate && (
         <UpdateBanner
           updateInfo={updateInfo}
@@ -239,6 +249,8 @@ export function App() {
         onOpenSync={() => setShowSyncModal(true)}
         onExportBackup={handleExportBackup}
         onImportBackup={handleImportBackup}
+        themeMode={themeMode}
+        onToggleTheme={handleToggleTheme}
       />
 
       <main className="flex-1">

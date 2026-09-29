@@ -122,10 +122,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-xl flex flex-col overflow-hidden transition-colors">
         {/* Search Input */}
-        <div className="p-3.5 border-b border-slate-200 flex items-center gap-3">
+        <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
           <Search className="w-5 h-5 text-slate-400 shrink-0 ml-1" />
           <input
             ref={inputRef}
@@ -133,17 +133,17 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search symptoms, lab bounds, patient notes, #tags..."
-            className="flex-1 text-sm bg-transparent outline-none placeholder:text-slate-400 text-slate-900"
+            className="flex-1 text-sm bg-transparent outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100"
           />
           {query && (
             <button
               onClick={() => setQuery('')}
-              className="p-1 text-slate-400 hover:text-slate-600 rounded-md"
+              className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md"
             >
               <X className="w-4 h-4" />
             </button>
           )}
-          <kbd className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+          <kbd className="text-[10px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
             ESC
           </kbd>
         </div>
@@ -151,11 +151,11 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         {/* Results List */}
         <div className="max-h-96 overflow-y-auto p-2">
           {query.trim().length === 0 ? (
-            <div className="p-6 text-center text-xs text-slate-400">
+            <div className="p-6 text-center text-xs text-slate-400 dark:text-slate-500">
               Type to search across medical checklists, symptoms, hospital reference ranges, and patient notes.
             </div>
           ) : results.length === 0 ? (
-            <div className="p-6 text-center text-xs text-slate-400">
+            <div className="p-6 text-center text-xs text-slate-400 dark:text-slate-500">
               No results found for "{query}".
             </div>
           ) : (
@@ -164,27 +164,27 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 <button
                   key={i}
                   onClick={() => handleSelect(r)}
-                  className="w-full text-left p-2.5 rounded-xl hover:bg-slate-100/80 transition-colors flex items-center justify-between group"
+                  className="w-full text-left p-2.5 rounded-xl hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-colors flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="p-2 bg-slate-100 text-slate-600 rounded-lg group-hover:bg-white group-hover:shadow-xs transition-all">
+                    <div className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg group-hover:bg-white dark:group-hover:bg-slate-700 group-hover:shadow-xs transition-all">
                       {r.badge === 'Template' ? (
-                        <FileText className="w-4 h-4 text-indigo-600" />
+                        <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                       ) : r.badge === 'Encounter' ? (
-                        <Stethoscope className="w-4 h-4 text-emerald-600" />
+                        <Stethoscope className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                       ) : (
-                        <CheckSquare className="w-4 h-4 text-slate-600" />
+                        <CheckSquare className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold text-slate-900 truncate">
+                      <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
                         {r.title}
                       </div>
-                      <div className="text-[11px] text-slate-500 truncate">{r.subtitle}</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{r.subtitle}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded font-medium">
+                    <span className="text-[10px] bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded font-medium border border-transparent dark:border-slate-700">
                       {r.badge}
                     </span>
                     <ArrowRight className="w-3.5 h-3.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />

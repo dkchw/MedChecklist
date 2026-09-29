@@ -24,11 +24,12 @@ export interface PenSettings {
 }
 
 export const PRESET_PEN_COLORS = [
+  { name: 'Clinical White', value: '#f8fafc' },
   { name: 'Clinical Black', value: '#0f172a' },
-  { name: 'Medical Blue', value: '#0284c7' },
-  { name: 'Critical Red', value: '#ef4444' },
-  { name: 'Alert Amber', value: '#f59e0b' },
-  { name: 'Vitals Green', value: '#10b981' },
+  { name: 'Medical Blue', value: '#38bdf8' },
+  { name: 'Critical Red', value: '#f87171' },
+  { name: 'Alert Amber', value: '#fbbf24' },
+  { name: 'Vitals Green', value: '#34d399' },
   { name: 'Highlighter Yellow', value: 'rgba(250, 204, 21, 0.45)' },
   { name: 'Highlighter Mint', value: 'rgba(52, 211, 153, 0.45)' },
   { name: 'Highlighter Cyan', value: 'rgba(56, 189, 248, 0.45)' },

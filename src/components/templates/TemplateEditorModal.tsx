@@ -120,28 +120,28 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden transition-colors">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
           <div>
-            <h2 className="text-base font-bold text-slate-900">
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
               Edit Template & Hospital Reference Values
             </h2>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Tailor reference lab ranges, clinical criteria, and sections to your hospital
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* View Mode Switcher */}
-        <div className="flex border-b border-slate-200 px-6 pt-2 bg-white justify-between items-center">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 px-6 pt-2 bg-white dark:bg-slate-900 justify-between items-center transition-colors">
           <div className="flex gap-2">
             <button
               onClick={() => {
@@ -149,8 +149,8 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
               }}
               className={`pb-3 px-4 text-xs font-semibold border-b-2 transition-colors ${
                 activeTab === 'visual'
-                  ? 'border-slate-900 text-slate-900'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                  ? 'border-slate-900 dark:border-indigo-500 text-slate-900 dark:text-indigo-400'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
               Visual Form Editor
@@ -161,8 +161,8 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
               }}
               className={`pb-3 px-4 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
                 activeTab === 'markdown'
-                  ? 'border-slate-900 text-slate-900'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                  ? 'border-slate-900 dark:border-indigo-500 text-slate-900 dark:text-indigo-400'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
               <FileCode className="w-4 h-4" />
@@ -175,35 +175,35 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {activeTab === 'markdown' ? (
             <div className="space-y-2">
-              <label className="block text-xs font-semibold text-slate-700">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Template Markdown (Full GFM Specification):
               </label>
               <textarea
                 rows={18}
                 value={markdownText}
                 onChange={(e) => setMarkdownText(e.target.value)}
-                className="w-full font-mono text-xs p-4 bg-slate-900 text-slate-100 rounded-xl leading-relaxed outline-none focus:ring-2 focus:ring-slate-700"
+                className="w-full font-mono text-xs p-4 bg-slate-900 text-slate-100 rounded-xl leading-relaxed outline-none focus:ring-2 focus:ring-indigo-500 border border-slate-800"
               />
             </div>
           ) : (
             <div className="space-y-4">
               {/* Metadata */}
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/60">
                 <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Template Title:
                   </label>
                   <input
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg bg-white"
+                    className="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-indigo-500"
                   />
                 </div>
 
                 <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                    <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                    <Building2 className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                     <span>Hospital / Institution Name:</span>
                   </label>
                   <input
@@ -211,24 +211,24 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
                     value={institution}
                     onChange={(e) => setInstitution(e.target.value)}
                     placeholder="e.g. St. Jude Hospital, Central Medical"
-                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg bg-white"
+                    className="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-indigo-500"
                   />
                 </div>
 
                 <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Category:
                   </label>
                   <input
                     type="text"
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg bg-white"
+                    className="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-indigo-500"
                   />
                 </div>
 
                 <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Tags (comma separated):
                   </label>
                   <input
@@ -236,7 +236,7 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
                     value={tagsStr}
                     onChange={(e) => setTagsStr(e.target.value)}
                     placeholder="labs, troponin, icu"
-                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg bg-white"
+                    className="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-indigo-500"
                   />
                 </div>
               </div>
@@ -244,12 +244,12 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
               {/* Sections & Items */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
                     Sections & Checklist Items
                   </h3>
                   <button
                     onClick={handleAddSection}
-                    className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                    className="flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Add Section</span>
@@ -257,7 +257,7 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
                 </div>
 
                 {sections.map((sec, secIdx) => (
-                  <div key={sec.id} className="border border-slate-200 rounded-xl p-4 bg-white space-y-3">
+                  <div key={sec.id} className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-white dark:bg-slate-900 space-y-3">
                     <div className="flex items-center justify-between gap-2">
                       <input
                         type="text"
@@ -268,11 +268,11 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
                           setSections(updated);
                         }}
                         placeholder="Section Title"
-                        className="font-bold text-sm text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-slate-900 outline-none pb-0.5 flex-1"
+                        className="font-bold text-sm text-slate-900 dark:text-slate-100 border-b border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-slate-900 dark:focus:border-indigo-500 outline-none pb-0.5 flex-1 bg-transparent"
                       />
                       <button
                         onClick={() => handleRemoveSection(secIdx)}
-                        className="text-slate-400 hover:text-red-600 p-1 rounded"
+                        className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 p-1 rounded transition-colors"
                         title="Delete Section"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -281,7 +281,7 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
 
                     <div className="space-y-2">
                       {sec.items.map((item, itmIdx) => (
-                        <div key={item.id} className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg text-xs">
+                        <div key={item.id} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/70 p-2 rounded-lg text-xs">
                           <button
                             onClick={() => {
                               const updated = [...sections];
@@ -289,7 +289,7 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
                               setSections(updated);
                             }}
                             className={`p-1 rounded ${
-                              item.starred ? 'text-amber-500' : 'text-slate-300 hover:text-slate-500'
+                              item.starred ? 'text-amber-500' : 'text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400'
                             }`}
                             title="Star / Important"
                           >
@@ -305,7 +305,7 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
                               setSections(updated);
                             }}
                             placeholder="Item name / Clinical symptom / Test name"
-                            className="flex-1 bg-white px-2.5 py-1.5 rounded border border-slate-200 outline-none"
+                            className="flex-1 bg-white dark:bg-slate-900 px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-indigo-500"
                           />
 
                           <input
@@ -317,13 +317,13 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
                               setSections(updated);
                             }}
                             placeholder="Ref: e.g. < 14 ng/L, 3.5 - 5.0"
-                            className="w-48 bg-white px-2.5 py-1.5 rounded border border-slate-200 outline-none text-slate-600"
+                            className="w-48 bg-white dark:bg-slate-900 px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-700 outline-none text-slate-600 dark:text-slate-300 focus:ring-1 focus:ring-slate-900 dark:focus:ring-indigo-500"
                             title="Hospital Reference Value / Cutoff"
                           />
 
                           <button
                             onClick={() => handleRemoveItem(secIdx, itmIdx)}
-                            className="text-slate-400 hover:text-red-600 p-1"
+                            className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 p-1 transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -332,7 +332,7 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
 
                       <button
                         onClick={() => handleAddItem(secIdx)}
-                        className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1 pt-1"
+                        className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 pt-1 transition-colors"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Add Item</span>
@@ -346,20 +346,20 @@ export const TemplateEditorModal: React.FC<TemplateEditorModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-          <span className="text-xs text-slate-500">
+        <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-850 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <span className="text-xs text-slate-500 dark:text-slate-400">
             {institution ? `Target: ${institution}` : 'Standard Institutional Template'}
           </span>
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded-xl"
+              className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 dark:hover:bg-indigo-700 transition-colors shadow-sm"
             >
               <Save className="w-4 h-4" />
               <span>Save Template</span>

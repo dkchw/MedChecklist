@@ -55,24 +55,24 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
   const renderTemplateCard = (t: ChecklistTemplate) => (
     <div
       key={t.id}
-      className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between group"
+      className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between group"
     >
       <div>
         {/* Card Header */}
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
                 {t.category || 'General'}
               </span>
               {t.institution && (
-                <span className="text-[10px] font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md flex items-center gap-1">
+                <span className="text-[10px] font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md flex items-center gap-1 border border-indigo-100/50 dark:border-indigo-900/50">
                   <Building2 className="w-3 h-3" />
                   <span>{t.institution}</span>
                 </span>
               )}
             </div>
-            <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
               {t.title}
             </h3>
           </div>
@@ -80,7 +80,7 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
           <button
             onClick={() => onTogglePin(t.id)}
             className={`p-1.5 rounded-lg transition-colors ${
-              t.isPinned ? 'text-amber-500 bg-amber-50' : 'text-slate-300 hover:text-slate-600'
+              t.isPinned ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/50' : 'text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300'
             }`}
             title={t.isPinned ? 'Unpin' : 'Pin to top'}
           >
@@ -90,11 +90,11 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
 
         {/* Description */}
         {t.description && (
-          <p className="text-xs text-slate-500 mb-3 line-clamp-2">{t.description}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">{t.description}</p>
         )}
 
         {/* Section & item stats */}
-        <div className="text-[11px] text-slate-400 mb-3 flex items-center gap-2">
+        <div className="text-[11px] text-slate-400 dark:text-slate-500 mb-3 flex items-center gap-2">
           <span>{t.sections.length} Sections</span>
           <span>•</span>
           <span>{t.sections.reduce((acc, s) => acc + s.items.length, 0)} Checklist Items</span>
@@ -113,7 +113,7 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
                 className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
                   selectedTag === tag
                     ? 'bg-indigo-600 text-white font-medium'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
                 #{tag}
@@ -124,36 +124,36 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
       </div>
 
       {/* Card Actions */}
-      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-1">
+      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1">
         <div className="flex items-center gap-1">
           <button
             onClick={() => onOpenEditor(t)}
-            className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             title="Edit Template & Reference Values"
           >
             <Edit className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleCopyMarkdown(t)}
-            className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             title="Copy as Markdown"
           >
             {copiedId === t.id ? (
-              <Check className="w-4 h-4 text-emerald-600" />
+              <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             ) : (
               <Copy className="w-4 h-4" />
             )}
           </button>
           <button
             onClick={() => onOpenLlmModal(t)}
-            className="p-1.5 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors"
+            className="p-1.5 text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors"
             title="Generate LLM Prompt / Expand"
           >
             <Sparkles className="w-4 h-4" />
           </button>
           <button
             onClick={() => onDeleteTemplate(t.id)}
-            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors"
             title="Delete Template"
           >
             <Trash2 className="w-4 h-4" />
@@ -162,7 +162,7 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
 
         <button
           onClick={() => onInstantiateInEncounter(t)}
-          className="text-xs font-semibold px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-colors shadow-xs flex items-center gap-1"
+          className="text-xs font-semibold px-3 py-1.5 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-700 text-white rounded-xl transition-colors shadow-xs flex items-center gap-1"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Apply to Patient</span>
@@ -174,12 +174,12 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Title & Actions Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs transition-colors">
         <div>
-          <h1 className="text-lg font-bold text-slate-900">
+          <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
             Clinical Checklists & Hospital Templates
           </h1>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Standard protocols, admission checklists, and lab reference values customized per hospital
           </p>
         </div>
@@ -187,7 +187,7 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={onCreateTemplate}
-            className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 transition-colors shadow-sm"
+            className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 dark:hover:bg-indigo-700 transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
             <span>Create New Template</span>
@@ -204,8 +204,8 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
           }}
           className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
             selectedCategory === 'all' && !selectedTag
-              ? 'bg-slate-900 text-white'
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              ? 'bg-slate-900 dark:bg-indigo-600 text-white'
+              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
           }`}
         >
           All Templates ({templates.filter((t) => !t.isDeleted).length})
@@ -220,8 +220,8 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
             }}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
               selectedCategory === f.name
-                ? 'bg-slate-900 text-white'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                ? 'bg-slate-900 dark:bg-indigo-600 text-white'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             {f.name}
@@ -229,9 +229,9 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
         ))}
 
         {selectedTag && (
-          <div className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 px-2.5 py-1 rounded-xl text-xs font-semibold">
+          <div className="flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-xl text-xs font-semibold">
             <span>#{selectedTag}</span>
-            <button onClick={() => setSelectedTag(null)} className="hover:text-indigo-900">
+            <button onClick={() => setSelectedTag(null)} className="hover:text-indigo-900 dark:hover:text-white">
               ×
             </button>
           </div>
@@ -241,7 +241,7 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
       {/* Pinned Templates */}
       {pinnedTemplates.length > 0 && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
             <Pin className="w-3.5 h-3.5 text-amber-500 fill-current" />
             <span>Pinned Checklists & Protocols</span>
           </div>
@@ -254,7 +254,7 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
       {/* Standard / Unpinned Templates */}
       <div className="space-y-3">
         {pinnedTemplates.length > 0 && (
-          <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+          <div className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
             All Clinical Protocols
           </div>
         )}

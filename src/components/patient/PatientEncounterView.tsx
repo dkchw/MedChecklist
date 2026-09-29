@@ -228,16 +228,16 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
   if (activeEncounters.length === 0 || !currentEncounter) {
     return (
       <div className="max-w-4xl mx-auto p-12 text-center space-y-4">
-        <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto text-slate-500">
+        <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto text-slate-500 dark:text-slate-400">
           <User className="w-6 h-6" />
         </div>
-        <h2 className="text-base font-bold text-slate-900">No Active Patient Encounters</h2>
-        <p className="text-xs text-slate-500 max-w-sm mx-auto">
+        <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">No Active Patient Encounters</h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
           Create a patient encounter group box to attach clinical checklists, customize reference lab values, and begin bedside rounds.
         </p>
         <button
           onClick={onOpenNewPatientModal}
-          className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 transition-colors shadow-sm inline-flex items-center gap-1.5"
+          className="px-4 py-2 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-colors shadow-sm inline-flex items-center gap-1.5"
         >
           <Plus className="w-4 h-4" />
           <span>New Patient Encounter</span>
@@ -256,8 +256,8 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
             onClick={() => onSelectEncounter(enc.id)}
             className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 ${
               enc.id === currentEncounter.id
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                ? 'bg-slate-900 dark:bg-indigo-600 text-white shadow-sm'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/80'
             }`}
           >
             <span>{enc.patientIdentifier}</span>
@@ -265,8 +265,8 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
               <span
                 className={`text-[10px] px-1.5 py-0.2 rounded font-normal ${
                   enc.id === currentEncounter.id
-                    ? 'bg-slate-700 text-slate-200'
-                    : 'bg-slate-100 text-slate-600'
+                    ? 'bg-slate-700 dark:bg-indigo-800 text-slate-200 dark:text-indigo-200'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                 }`}
               >
                 Bed {enc.bedNumber}
@@ -277,7 +277,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
 
         <button
           onClick={onOpenNewPatientModal}
-          className="px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap border border-dashed border-slate-300 text-slate-500 hover:text-slate-900 hover:border-slate-400 hover:bg-white flex items-center gap-1 transition-colors"
+          className="px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap border border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-600 hover:bg-white dark:hover:bg-slate-900 flex items-center gap-1 transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>New Patient Box</span>
@@ -285,27 +285,27 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
       </div>
 
       {/* Patient Dossier Header */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors">
         <div>
           <div className="flex items-center gap-2.5 mb-1">
-            <h1 className="text-lg font-bold text-slate-900">
+            <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
               {currentEncounter.patientIdentifier}
             </h1>
             {currentEncounter.bedNumber && (
-              <span className="text-xs bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded-md">
+              <span className="text-xs bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-900">
                 Bed {currentEncounter.bedNumber}
               </span>
             )}
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700">
+            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900">
               {currentEncounter.status}
             </span>
           </div>
 
-          <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap">
+          <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
             {currentEncounter.age && <span>Age: {currentEncounter.age}</span>}
             {currentEncounter.sex && <span>Sex: {currentEncounter.sex}</span>}
             {currentEncounter.chiefComplaint && (
-              <span className="text-slate-700 font-medium">
+              <span className="text-slate-700 dark:text-slate-300 font-medium">
                 Chief Complaint: {currentEncounter.chiefComplaint}
               </span>
             )}
@@ -320,16 +320,16 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                   href={lnk.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-100 transition-colors"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-900/60 transition-colors"
                 >
                   {lnk.category === 'youtube' ? (
-                    <Video className="w-3 h-3 text-rose-600" />
+                    <Video className="w-3 h-3 text-rose-600 dark:text-rose-400" />
                   ) : lnk.category === 'pubmed' ? (
-                    <FileText className="w-3 h-3 text-blue-600" />
+                    <FileText className="w-3 h-3 text-blue-600 dark:text-blue-400" />
                   ) : lnk.category === 'wiki' ? (
-                    <Globe className="w-3 h-3 text-slate-600" />
+                    <Globe className="w-3 h-3 text-slate-600 dark:text-slate-400" />
                   ) : (
-                    <BookOpen className="w-3 h-3 text-indigo-600" />
+                    <BookOpen className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
                   )}
                   <span>{lnk.title}</span>
                   <ExternalLink className="w-2.5 h-2.5 opacity-60" />
@@ -345,7 +345,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                 <div
                   key={img.id}
                   onClick={() => setActiveLightboxImage(img.url)}
-                  className="group relative w-16 h-16 rounded-xl border border-slate-200 overflow-hidden cursor-pointer shadow-2xs hover:shadow-xs transition-all bg-slate-900"
+                  className="group relative w-16 h-16 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden cursor-pointer shadow-2xs hover:shadow-xs transition-all bg-slate-900"
                 >
                   <img src={img.url} alt={img.caption || 'Clinical Snapshot'} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                   <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
@@ -376,31 +376,31 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
           {/* Attach Image / Snapshot */}
           <button
             onClick={() => setAttachTarget({ type: 'encounter' })}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition-colors border border-slate-200/50 dark:border-slate-700"
             title="Attach ECG, rash photo, wound snapshot or medical link"
           >
-            <ImageIcon className="w-3.5 h-3.5 text-slate-600" />
+            <ImageIcon className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
             <span>Attach Image / Link</span>
           </button>
 
           {/* Copy for LLM */}
           <button
             onClick={onOpenLlmModal}
-            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-semibold transition-colors border border-indigo-100 dark:border-indigo-900/50"
             title="Copy prompt for LLM or paste AI output"
           >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+            <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             <span>LLM Sync</span>
           </button>
 
           {/* Copy Markdown */}
           <button
             onClick={handleCopyMarkdown}
-            className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors"
+            className="p-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors"
             title="Copy as Markdown"
           >
             {copied ? (
-              <Check className="w-4 h-4 text-emerald-600" />
+              <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             ) : (
               <Copy className="w-4 h-4" />
             )}
@@ -409,7 +409,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
           {/* Delete / Archive */}
           <button
             onClick={() => onDeleteEncounter(currentEncounter.id)}
-            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl border border-slate-200 transition-colors"
+            className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors"
             title="Delete Encounter"
           >
             <Trash2 className="w-4 h-4" />
@@ -420,21 +420,21 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
       {/* Checklists Attached to Patient */}
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
             Active Checklists & Protocols ({currentEncounter.checklists.length})
           </h2>
 
           <div className="relative">
             <button
               onClick={() => setShowAttachMenu(!showAttachMenu)}
-              className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+              className="flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
             >
               <Plus className="w-4 h-4" />
               <span>Attach Another Checklist / Template</span>
             </button>
 
             {showAttachMenu && (
-              <div className="absolute right-0 mt-1 w-72 bg-white rounded-xl border border-slate-200 shadow-xl p-2 z-30 space-y-1">
+              <div className="absolute right-0 mt-1 w-72 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl p-2 z-30 space-y-1">
                 <div className="text-[11px] font-semibold text-slate-400 px-2 py-1">
                   Select Template to Attach:
                 </div>
@@ -444,7 +444,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                     <button
                       key={t.id}
                       onClick={() => handleAttachTemplate(t)}
-                      className="w-full text-left p-2 rounded-lg text-xs hover:bg-slate-100 flex items-center justify-between text-slate-700"
+                      className="w-full text-left p-2 rounded-lg text-xs hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between text-slate-700 dark:text-slate-200"
                     >
                       <span className="truncate">{t.title}</span>
                       <Plus className="w-3.5 h-3.5 text-slate-400" />
@@ -459,14 +459,14 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
         {currentEncounter.checklists.map((chk, chkIdx) => (
           <div
             key={chk.id}
-            className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs"
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-2xs"
           >
             {/* Checklist Header */}
-            <div className="px-5 py-3.5 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between">
+            <div className="px-5 py-3.5 bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">{chk.title}</h3>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">{chk.title}</h3>
                 {chk.institution && (
-                  <span className="text-[11px] text-indigo-700 flex items-center gap-1">
+                  <span className="text-[11px] text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
                     <Building2 className="w-3 h-3" />
                     <span>{chk.institution}</span>
                   </span>
@@ -476,7 +476,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => onOpenTemplateEditor(chk.templateId)}
-                  className="text-xs font-medium text-slate-500 hover:text-slate-800 flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-slate-200/60"
+                  className="text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors"
                   title="Customize Lab References & Bounds"
                 >
                   <Sliders className="w-3.5 h-3.5" />
@@ -484,7 +484,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                 </button>
                 <button
                   onClick={() => handleRemoveChecklist(chkIdx)}
-                  className="p-1 text-slate-400 hover:text-red-600 rounded"
+                  className="p-1 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"
                   title="Remove from encounter"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -496,7 +496,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
             <div className="p-5 space-y-6">
               {chk.sections.map((sec, secIdx) => (
                 <div key={sec.id} className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     {sec.title}
                   </h4>
 
@@ -506,8 +506,8 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                         key={item.id}
                         className={`p-2.5 rounded-xl border transition-all ${
                           item.checked
-                            ? 'bg-slate-50 border-slate-300'
-                            : 'bg-white border-slate-200/80 hover:border-slate-300'
+                            ? 'bg-slate-50 dark:bg-slate-800/70 border-slate-300 dark:border-slate-700'
+                            : 'bg-white dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600'
                         }`}
                       >
                         <div className="flex items-center gap-2.5">
@@ -516,8 +516,8 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                             onClick={() => handleToggleItem(chkIdx, secIdx, itmIdx)}
                             className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                               item.checked
-                                ? 'bg-slate-900 border-slate-900 text-white'
-                                : 'border-slate-300 hover:border-slate-400 bg-white'
+                                ? 'bg-slate-900 dark:bg-indigo-600 border-slate-900 dark:border-indigo-600 text-white'
+                                : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-900'
                             }`}
                           >
                             {item.checked && <Check className="w-3 h-3 stroke-[3]" />}
@@ -529,7 +529,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                             className={`p-0.5 rounded transition-colors ${
                               item.starred
                                 ? 'text-amber-500'
-                                : 'text-slate-300 hover:text-slate-400'
+                                : 'text-slate-300 dark:text-slate-600 hover:text-slate-400 dark:hover:text-slate-400'
                             }`}
                           >
                             <Star className="w-3.5 h-3.5 fill-current" />
@@ -540,8 +540,8 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                             onClick={() => handleToggleItem(chkIdx, secIdx, itmIdx)}
                             className={`text-xs flex-1 cursor-pointer select-none ${
                               item.checked
-                                ? 'font-semibold text-slate-900'
-                                : 'text-slate-700'
+                                ? 'font-semibold text-slate-900 dark:text-slate-100'
+                                : 'text-slate-700 dark:text-slate-300'
                             }`}
                           >
                             {item.text}
@@ -562,9 +562,9 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                                   )
                                 }
                                 placeholder="Patient Value"
-                                className="w-28 text-xs font-semibold px-2 py-0.5 border border-slate-200 rounded-md bg-white outline-none focus:ring-1 focus:ring-slate-900 text-slate-800"
+                                className="w-28 text-xs font-semibold px-2 py-0.5 border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-indigo-500 text-slate-800 dark:text-slate-100"
                               />
-                              <span className="text-[11px] text-slate-400">
+                              <span className="text-[11px] text-slate-400 dark:text-slate-500">
                                 [{item.referenceValue}]
                               </span>
                             </div>
@@ -581,8 +581,8 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                               }
                               className={`p-1 rounded-lg text-xs flex items-center gap-1 transition-colors ${
                                 item.note
-                                  ? 'text-indigo-600 bg-indigo-50 font-medium'
-                                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                                  ? 'text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 font-medium'
+                                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                               }`}
                               title="Add/Edit Markdown Note"
                             >
@@ -600,7 +600,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                                   itemIdx: itmIdx,
                                 })
                               }
-                              className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                              className="p-1 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                               title="Attach image or link to this item"
                             >
                               <ImageIcon className="w-3.5 h-3.5" />
@@ -609,7 +609,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                             {/* Delete item */}
                             <button
                               onClick={() => handleDeleteItem(chkIdx, secIdx, itmIdx)}
-                              className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                              className="p-1 rounded-lg text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
                               title="Delete Item"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -626,14 +626,14 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                                 href={lnk.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-[10px] font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100 transition-colors"
+                                className="inline-flex items-center gap-1 text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/60 transition-colors"
                               >
                                 {lnk.category === 'youtube' ? (
-                                  <Video className="w-3 h-3 text-rose-600" />
+                                  <Video className="w-3 h-3 text-rose-600 dark:text-rose-400" />
                                 ) : lnk.category === 'pubmed' ? (
-                                  <FileText className="w-3 h-3 text-blue-600" />
+                                  <FileText className="w-3 h-3 text-blue-600 dark:text-blue-400" />
                                 ) : (
-                                  <Globe className="w-3 h-3 text-slate-600" />
+                                  <Globe className="w-3 h-3 text-slate-600 dark:text-slate-400" />
                                 )}
                                 <span>{lnk.title}</span>
                                 <ExternalLink className="w-2.5 h-2.5 opacity-60" />
@@ -649,7 +649,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                               <div
                                 key={img.id}
                                 onClick={() => setActiveLightboxImage(img.url)}
-                                className="group relative w-12 h-12 rounded-lg border border-slate-200 overflow-hidden cursor-pointer bg-slate-900"
+                                className="group relative w-12 h-12 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden cursor-pointer bg-slate-900"
                               >
                                 <img
                                   src={img.url}
@@ -679,7 +679,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                                 )
                               }
                               placeholder="Clinical note (in Markdown)... e.g. Left sided, worsening with inspiration"
-                              className="w-full text-xs font-mono px-3 py-1.5 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white outline-none focus:ring-1 focus:ring-slate-900"
+                              className="w-full text-xs font-mono px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-indigo-500"
                             />
                           </div>
                         )}
@@ -690,7 +690,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                   {/* Add Item Button for manual typing */}
                   <button
                     onClick={() => handleAddItemToSection(chkIdx, secIdx)}
-                    className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 flex items-center gap-1 pl-2 pt-1"
+                    className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 flex items-center gap-1 pl-2 pt-1 transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Add Item to {sec.title}</span>
@@ -702,16 +702,16 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
         ))}
 
         {/* Bedside Notes & Inking Section */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-3 transition-colors">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-indigo-600" />
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+              <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
                 Bedside & Handwritten Notes (Editable Markdown)
               </h3>
             </div>
             {currentEncounter.inkStrokes && currentEncounter.inkStrokes.length > 0 && (
-              <span className="text-[11px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-medium flex items-center gap-1">
+              <span className="text-[11px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded font-medium flex items-center gap-1 border border-indigo-100 dark:border-indigo-900/50">
                 <PenTool className="w-3 h-3" />
                 <span>{currentEncounter.inkStrokes.length} Stylus Strokes Saved</span>
               </span>
@@ -729,7 +729,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
               })
             }
             placeholder="Write clinical synthesis, differential diagnoses, or bedside observations here in Markdown...&#10;- Sublingual nitro administered&#10;- Serial ECG scheduled"
-            className="w-full text-xs font-mono p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 bg-slate-50"
+            className="w-full text-xs font-mono p-3 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-indigo-500 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
           />
         </div>
       </div>
