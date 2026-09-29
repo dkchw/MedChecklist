@@ -1,28 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, FileText, CheckSquare, Stethoscope, Tag, ArrowRight, X } from 'lucide-react';
-import { ChecklistTemplate } from '../../types/checklist';
+import { Search, FileText, CheckSquare, Stethoscope, Layers, ArrowRight, X } from 'lucide-react';
+import { Checklist } from '../../types/checklist';
+import { ClinicalTemplate } from '../../types/template';
 import { PatientEncounter } from '../../types/patient';
 
 interface SearchResult {
-  type: 'template' | 'encounter' | 'item' | 'note';
+  type: 'checklist' | 'template' | 'encounter' | 'item' | 'note';
   title: string;
   subtitle: string;
   badge: string;
   targetId: string;
-  targetSection?: string;
 }
 
 interface SearchModalProps {
-  templates: ChecklistTemplate[];
+  checklists: Checklist[];
+  templates: ClinicalTemplate[];
   encounters: PatientEncounter[];
+  onSelectChecklist: (checklistId: string) => void;
   onSelectTemplate: (templateId: string) => void;
   onSelectEncounter: (encounterId: string) => void;
   onClose: () => void;
 }
 
 export const SearchModal: React.FC<SearchModalProps> = ({
+  checklists,
   templates,
   encounters,
+  onSelectChecklist,
   onSelectTemplate,
   onSelectEncounter,
   onClose,
@@ -38,71 +42,100 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const q = query.trim().toLowerCase();
 
   if (q.length > 0) {
-    // Search templates
-    for (const tpl of templates) {
-      if (tpl.isDeleted) continue;
+    // 1. Search modular checklists
+    for (const chk of checklists) {
+      if (chk.isDeleted) continue;
       if (
-        tpl.title.toLowerCase().includes(q) ||
-        tpl.description?.toLowerCase().includes(q) ||
-        tpl.tags.some(t => t.toLowerCase().includes(q))
+        chk.title.toLowerCase().includes(q) ||
+        chk.description?.toLowerCase().includes(q) ||
+        chk.tags?.some((t) => t.toLowerCase().includes(q))
       ) {
         results.push({
-          type: 'template',
-          title: tpl.title,
-          subtitle: `${tpl.category || 'General'} • ${tpl.tags.join(', ')}`,
-          badge: 'Template',
-          targetId: tpl.id,
+          type: 'checklist',
+          title: chk.title,
+          subtitle: `${chk.category || 'General'} • ${(chk.tags || []).join(', ')}`,
+          badge: 'Checklist',
+          targetId: chk.id,
         });
       }
 
-      // Search template items
-      for (const sec of tpl.sections) {
-        for (const itm of sec.items) {
-          if (itm.text.toLowerCase().includes(q) || itm.referenceValue?.toLowerCase().includes(q)) {
+      // Search checklist items
+      for (const sec of chk.sections || []) {
+        for (const itm of sec.items || []) {
+          if (
+            itm.text.toLowerCase().includes(q) ||
+            itm.referenceValue?.toLowerCase().includes(q)
+          ) {
             results.push({
-              type: 'item',
+              type: 'checklist',
               title: itm.text,
-              subtitle: `In ${tpl.title} > ${sec.title} ${itm.referenceValue ? `[${itm.referenceValue}]` : ''}`,
-              badge: 'Item',
-              targetId: tpl.id,
+              subtitle: `In ${chk.title} > ${sec.title} ${
+                itm.referenceValue ? `[${itm.referenceValue}]` : ''
+              }`,
+              badge: 'Checklist Item',
+              targetId: chk.id,
             });
           }
         }
       }
     }
 
-    // Search encounters
+    // 2. Search clinical templates
+    for (const tpl of templates) {
+      if (tpl.isDeleted) continue;
+      if (
+        tpl.title.toLowerCase().includes(q) ||
+        tpl.description?.toLowerCase().includes(q) ||
+        tpl.protocolNotes?.toLowerCase().includes(q) ||
+        tpl.tags?.some((t) => t.toLowerCase().includes(q))
+      ) {
+        results.push({
+          type: 'template',
+          title: tpl.title,
+          subtitle: `${tpl.category || 'General'} • Bundle with ${tpl.checklistIds?.length || 0} checklists`,
+          badge: 'Template Bundle',
+          targetId: tpl.id,
+        });
+      }
+    }
+
+    // 3. Search encounters
     for (const enc of encounters) {
       if (enc.isDeleted) continue;
       if (
         enc.patientIdentifier.toLowerCase().includes(q) ||
         enc.chiefComplaint?.toLowerCase().includes(q) ||
         enc.generalNotes?.toLowerCase().includes(q) ||
-        enc.tags.some(t => t.toLowerCase().includes(q))
+        enc.group?.toLowerCase().includes(q) ||
+        enc.tags?.some((t) => t.toLowerCase().includes(q))
       ) {
         results.push({
           type: 'encounter',
           title: enc.patientIdentifier,
-          subtitle: `Complaint: ${enc.chiefComplaint || 'None'} ${enc.bedNumber ? `• Bed: ${enc.bedNumber}` : ''}`,
-          badge: 'Encounter',
+          subtitle: `${enc.group ? `[${enc.group}] ` : ''}Complaint: ${
+            enc.chiefComplaint || 'None'
+          } ${enc.bedNumber ? `• Bed: ${enc.bedNumber}` : ''}`,
+          badge: 'Patient',
           targetId: enc.id,
         });
       }
 
       // Search encounter items & notes
-      for (const chk of enc.checklists) {
-        for (const sec of chk.sections) {
-          for (const itm of sec.items) {
+      for (const chk of enc.checklists || []) {
+        for (const sec of chk.sections || []) {
+          for (const itm of sec.items || []) {
             if (
               itm.text.toLowerCase().includes(q) ||
               itm.note?.toLowerCase().includes(q) ||
               itm.labValue?.toLowerCase().includes(q)
             ) {
               results.push({
-                type: itm.note?.toLowerCase().includes(q) ? 'note' : 'item',
+                type: 'encounter',
                 title: itm.text,
-                subtitle: `${enc.patientIdentifier} > ${chk.title} ${itm.note ? `• Note: "${itm.note}"` : ''}`,
-                badge: itm.note?.toLowerCase().includes(q) ? 'Note' : 'Finding',
+                subtitle: `${enc.patientIdentifier} > ${chk.title} ${
+                  itm.note ? `• Note: "${itm.note}"` : ''
+                }`,
+                badge: itm.note?.toLowerCase().includes(q) ? 'Clinical Note' : 'Encounter Step',
                 targetId: enc.id,
               });
             }
@@ -113,10 +146,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   }
 
   const handleSelect = (r: SearchResult) => {
-    if (r.type === 'encounter' || r.type === 'note') {
+    if (r.type === 'encounter') {
       onSelectEncounter(r.targetId);
-    } else {
+    } else if (r.type === 'template') {
       onSelectTemplate(r.targetId);
+    } else {
+      onSelectChecklist(r.targetId);
     }
     onClose();
   };
@@ -132,7 +167,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search symptoms, lab bounds, patient notes, #tags..."
+            placeholder="Search symptoms, ward, checklists, templates, patient notes..."
             className="flex-1 text-sm bg-transparent outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100"
           />
           {query && (
@@ -152,7 +187,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         <div className="max-h-96 overflow-y-auto p-2">
           {query.trim().length === 0 ? (
             <div className="p-6 text-center text-xs text-slate-400 dark:text-slate-500">
-              Type to search across medical checklists, symptoms, hospital reference ranges, and patient notes.
+              Type to search across modular checklists, clinical template bundles, wards, and patient encounters.
             </div>
           ) : results.length === 0 ? (
             <div className="p-6 text-center text-xs text-slate-400 dark:text-slate-500">
@@ -168,9 +203,9 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg group-hover:bg-white dark:group-hover:bg-slate-700 group-hover:shadow-xs transition-all">
-                      {r.badge === 'Template' ? (
-                        <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                      ) : r.badge === 'Encounter' ? (
+                      {r.badge.includes('Template') ? (
+                        <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      ) : r.badge === 'Patient' ? (
                         <Stethoscope className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                       ) : (
                         <CheckSquare className="w-4 h-4 text-slate-600 dark:text-slate-400" />
@@ -180,7 +215,9 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                       <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
                         {r.title}
                       </div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{r.subtitle}</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                        {r.subtitle}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

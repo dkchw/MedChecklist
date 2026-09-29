@@ -5,12 +5,41 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg?logo=typescript)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC.svg?logo=tailwind-css)](https://tailwindcss.com/)
+[![Encryption](https://img.shields.io/badge/Security-AES--256--GCM%20E2EE-emerald.svg)](src/utils/cryptoVault.ts)
 
-A minimalist, high-performance, clinical-grade medical checklist and patient encounter platform. Built around **Markdown as the single source of truth**, with full tablet stylus/pen handwriting support for bedside rounds, hospital lab reference range customization, rich image & link attachments, format-first LLM/chatbox interoperability, and dual-layer synchronization (GitHub Private Repo with PAT + Local Offline P2P Wi-Fi Sync).
+A minimalist, high-performance, clinical-grade medical checklist and patient encounter platform. Built around **Markdown as the single source of truth**, with full tablet stylus/pen handwriting support for bedside rounds, client-side encryption at rest (AES-256-GCM), end-to-end encrypted (E2EE) P2P synchronization with QR code instant connection, patient ward grouping and archiving, hospital lab reference range customization, rich image & link attachments, format-first LLM chatbox interoperability, and dual-layer synchronization (GitHub Private Repo with PAT + Local Offline P2P Wi-Fi Sync).
 
 ---
 
 ## 🌟 Key Highlights
+
+### 🔒 Client-Side Encryption at Rest & Security Vault
+- **AES-256-GCM Encryption**: All local clinical encounters, patient records, notes, and lab data are encrypted at rest using Web Crypto API.
+- **Master Passphrase Vault**: Optional doctor-configured master passphrase with PBKDF2 (100,000 iterations) key derivation. When locked, patient data is completely shielded in memory and disk.
+- **Seamless Local Key**: Devices operate smoothly with a hardware-bound device key while maintaining instant lock/unlock capabilities.
+
+### 📶 P2P End-to-End Encryption (E2EE) with QR Code Connection
+- **Zero-Knowledge Transport**: Direct peer-to-peer data sync between Android tablet and PC is encrypted end-to-end with AES-256-GCM so hospital Wi-Fi networks and intermediaries cannot inspect or modify patient data.
+- **Instant QR Code Pairing**:
+  - Show your device QR code on your tablet or PC.
+  - Scan partner device QR code instantly via live camera video feed (`jsQR`) or image upload.
+- **Saved Connected Devices**: Manage trusted paired devices with pairing dates, trust status, and instant 1-click encrypted export/import.
+
+### 🏥 Ward Grouping & Patient Archiving
+- **Ward / Unit Grouping**: Organize bedside rounds by unit (e.g. *Emergency*, *ICU*, *Internal Med*, *Cardiology*, *Surgery*, or custom ward tags). Filter bedside rounds with one click.
+- **Active Rounds vs. Archived History**:
+  - Keep active rounds clean and uncluttered.
+  - Archive discharged patients with full dossier history preserved.
+  - Restore archived patients back to active rounds at any time with one click.
+
+### 🧩 Checklist-First Architecture & Clinical Template Bundles
+- **Checklists First (Atomic & Modular)**:
+  - Atomic symptom checklists, lab panels, procedural safety checks, and hospital reference ranges.
+  - Edit visually or via raw GitHub Flavored Markdown (GFM).
+- **Clinical Template Bundles**:
+  - Bundles that group multiple modular checklists with standard clinical protocol guidance and ward notes in Markdown (e.g. *Sepsis Resuscitation Bundle*, *Acute Chest Pain & ACS Protocol*, *ICU Multi-System Daily Rounds*).
+- **Patient Dossiers**:
+  - Initialized using a predefined template bundle, combined with additional checklists and custom clinical notes written via keyboard Markdown or stylus handwriting.
 
 ### 📋 Markdown-First Universal Core
 - Every checklist item, clinical observation, hospital reference range, and patient encounter dossier is structured in standard **GitHub Flavored Markdown (GFM)**:
@@ -43,21 +72,6 @@ A minimalist, high-performance, clinical-grade medical checklist and patient enc
   - *Clinical SOAP Synthesis*: Formats findings into Subjective, Objective, Assessment, and Plan.
   - *Protocol & Checklist Expansion*: Expands criteria using international clinical guidelines.
 - **"Paste from LLM"**: Real-time parser that recognizes `- [x]` positive findings, `- [ ]` pending workups, and Markdown notes from ChatGPT, Claude, or DeepSeek, offering an interactive preview before merging into the active encounter.
-
-### 🏥 Hospital-Customizable Templates & Lab References
-- Modify normal reference bounds (e.g., high-sensitivity Troponin cutoffs, Potassium ranges) for your specific hospital or laboratory.
-- Switch seamlessly between Visual Form Editing and Direct Raw Markdown editing.
-- Pre-loaded with standard clinical protocols:
-  1. **Review of Systems & History (H&P)**
-  2. **Hospital Lab Reference Ranges Panel** (CBC, BMP, Cardiac Biomarkers, Coagulation)
-  3. **Emergency Chest Pain / ACS Triage Protocol**
-  4. **Sepsis 3.0 & SOFA Quick Resuscitation Bundle**
-  5. **Pre-Operative Assessment & Clearance Protocol**
-
-### 👥 Multi-Patient Encounter Group Boxes
-- Tabbed bedside workspace for tracking multiple patients simultaneously (e.g. Bed 4, Bed 7, Outpatient 101).
-- Attach any combination of checklists and protocols to a patient dossier.
-- Enter distraction-free Bedside Mode with one click.
 
 ### 🔄 GitHub Private Repo (PAT) & Local P2P Sync
 - **GitHub Private Repo Sync**:
@@ -95,59 +109,20 @@ npm run dev
 ## 📱 Android Tablet Setup
 
 1. **Install Android APK**:
-   - Download the APK directly from the [GitHub Releases](https://github.com/dkchw/MedChecklist/releases) page.
+   - Download the APK directly from the [GitHub Releases](https://github.com/dkchw/MedChecklist/releases) page (`medchecklist-v1.0.0.apk`).
    - Built with full hardware stylus and S-Pen pressure support.
 2. **Bedside Inking**:
-   - Tap "Bedside Mode (Pen / Stylus)" on any patient encounter.
-   - Use the floating pen toolbar to select your pen, highlighter, or eraser.
-   - Tap "Add Symptom" to write down unlisted symptoms on the fly.
-
----
-
-## 📝 Markdown Specification Reference
-
-MedChecklist interprets standard GFM:
-
-```markdown
-# Encounter: Bed 4 - Doe, J.
-> Age: 62 | Sex: M | Bed/Room: 4A | Status: active
-> Chief Complaint: Acute retrosternal chest pain
-> Tags: #cardio #urgent #triage
-> Clinical References: [UpToDate: ACS Evaluation](https://www.uptodate.com/...)
-
----
-### Checklist: Emergency Chest Pain / ACS Protocol (AHA/ACC Guidelines)
-
-#### Initial Red Flags & Presentation
-- [x] Pain radiating to left shoulder/arm or jaw *starred*
-  > Note: Radiating to left shoulder & arm for 90 minutes
-- [x] Associated diaphoresis, dyspnea, nausea
-  > Note: Profuse sweating upon EMS arrival
-- [ ] Hemodynamic instability (BP < 90 mmHg or HR > 110) *starred*
-  > Note: BP 138/84, HR 88
-- [x] Relief with sublingual nitroglycerin
-  > Note: Pain reduced from 8/10 to 4/10
-
-#### Cardiac Biomarkers & Coagulation
-- [x] High-Sensitivity Troponin I: 148 ng/L (Elevated) [Normal: < 14 ng/L (Normal)] *starred*
-  > Note: Stat delta troponin ordered in 1 hour
-- [ ] INR (International Normalized Ratio): 1.0 [Normal: 0.8 - 1.1]
-
----
-### Attached Clinical Images
-![12-Lead ECG showing deep TWI in V3-V5](data:image/png;base64,...)
-
----
-### Bedside & Handwritten Notes (Editable MD)
-- Bedside ECG: T-wave inversion in V3-V5
-- Sublingual nitro x1 administered at 14:15, partial relief
-- Cardiology fellow on call paged
-```
+   - Open any active patient encounter.
+   - Tap **"Bedside Mode (Pen / Stylus)"** to enter the clean, paper-like interface with vector pen and highlighter tools.
+3. **P2P E2EE Connection**:
+   - Tap the Wi-Fi icon in the header, choose **"Pair (QR)"**, and scan your PC's QR code with the tablet camera to establish trusted encrypted sync.
 
 ---
 
 ## 📄 License
 
-Licensed under the **Apache License, Version 2.0** (the "License"). You may obtain a copy of the License in the [LICENSE](LICENSE) file or at:
+Licensed under the **Apache License, Version 2.0** (the "License"). You may obtain a copy of the License at:
 
-[http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0)
+```
+http://www.apache.org/licenses/LICENSE-2.0
+```

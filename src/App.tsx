@@ -1,53 +1,68 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './db/db';
-import { ChecklistTemplate, Folder } from './types/checklist';
+import { Checklist, Folder } from './types/checklist';
+import { ClinicalTemplate } from './types/template';
 import { PatientEncounter, EncounterChecklistInstance } from './types/patient';
 import { Header } from './components/common/Header';
 import { SearchModal } from './components/common/SearchModal';
 import { SyncModal } from './components/sync/SyncModal';
 import { LlmModal } from './components/llm/LlmModal';
+import { ChecklistManagerView } from './components/checklists/ChecklistManagerView';
+import { ChecklistEditorModal } from './components/checklists/ChecklistEditorModal';
 import { TemplateManagerView } from './components/templates/TemplateManagerView';
-import { TemplateEditorModal } from './components/templates/TemplateEditorModal';
+import { ClinicalTemplateEditorModal } from './components/templates/ClinicalTemplateEditorModal';
 import { PatientEncounterView } from './components/patient/PatientEncounterView';
 import { PatientFacingMode } from './components/patient/PatientFacingMode';
 import { NewPatientModal } from './components/patient/NewPatientModal';
+import { VaultModal } from './components/security/VaultModal';
 import { P2PSyncService } from './utils/p2pSync';
+import { cryptoVault } from './utils/cryptoVault';
 import { checkForGitHubUpdate, UpdateCheckResult } from './utils/githubUpdater';
 import { UpdateBanner } from './components/common/UpdateBanner';
 import { getInitialTheme, applyTheme, ThemeMode } from './utils/theme';
 
 export function App() {
-  const [currentTab, setCurrentTab] = useState<'encounters' | 'templates'>('encounters');
+  const [currentTab, setCurrentTab] = useState<'encounters' | 'checklists' | 'templates'>('encounters');
   const [themeMode, setThemeMode] = useState<ThemeMode>(getInitialTheme());
-  const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
+  const [checklists, setChecklists] = useState<Checklist[]>([]);
+  const [clinicalTemplates, setClinicalTemplates] = useState<ClinicalTemplate[]>([]);
   const [encounters, setEncounters] = useState<PatientEncounter[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedEncounterId, setSelectedEncounterId] = useState<string | null>(null);
+
+  // Security & Vault State
+  const [isVaultLocked, setIsVaultLocked] = useState<boolean>(cryptoVault.isVaultLocked());
+  const [showVaultModal, setShowVaultModal] = useState<boolean>(false);
 
   // Modals & Mode States
   const [isBedsideMode, setIsBedsideMode] = useState<boolean>(false);
   const [showSearchModal, setShowSearchModal] = useState<boolean>(false);
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   const [showNewPatientModal, setShowNewPatientModal] = useState<boolean>(false);
-  const [editingTemplate, setEditingTemplate] = useState<ChecklistTemplate | null>(null);
+
+  const [editingChecklist, setEditingChecklist] = useState<Checklist | null>(null);
+  const [editingClinicalTemplate, setEditingClinicalTemplate] = useState<ClinicalTemplate | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [llmTarget, setLlmTarget] = useState<{
     encounter?: PatientEncounter;
-    template?: ChecklistTemplate;
+    checklist?: Checklist;
   } | null>(null);
 
   // Load database data
   const refreshData = async () => {
-    const tpls = await db.templates.toArray();
+    const chks = await db.checklists.toArray();
+    const tmpls = await db.clinicalTemplates.toArray();
     const encs = await db.encounters.toArray();
     const flds = await db.folders.orderBy('order').toArray();
 
-    setTemplates(tpls);
+    setChecklists(chks);
+    setClinicalTemplates(tmpls);
     setEncounters(encs);
     setFolders(flds);
+    setIsVaultLocked(cryptoVault.isVaultLocked());
 
     if (!selectedEncounterId && encs.length > 0) {
-      const firstActive = encs.find((e) => !e.isDeleted);
+      const firstActive = encs.find((e) => !e.isDeleted && e.status === 'active') || encs.find((e) => !e.isDeleted);
       if (firstActive) setSelectedEncounterId(firstActive.id);
     }
   };
@@ -90,7 +105,7 @@ export function App() {
     setEncounters((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
   };
 
-  // Delete Encounter (Soft delete with tombstone to prevent sync conflict/loss)
+  // Delete Encounter (Soft delete with tombstone)
   const handleDeleteEncounter = async (id: string) => {
     const enc = encounters.find((e) => e.id === id);
     if (!enc) return;
@@ -103,82 +118,90 @@ export function App() {
   const handleCreateEncounter = async (newEnc: PatientEncounter) => {
     await db.encounters.put(newEnc);
     setSelectedEncounterId(newEnc.id);
+    setCurrentTab('encounters');
     await refreshData();
   };
 
-  // Save Template
-  const handleSaveTemplate = async (tpl: ChecklistTemplate) => {
-    await db.templates.put(tpl);
+  // Checklist Actions
+  const handleSaveChecklist = async (chk: Checklist) => {
+    await db.checklists.put(chk);
     await refreshData();
   };
 
-  // Delete Template (Soft delete)
-  const handleDeleteTemplate = async (id: string) => {
-    const tpl = templates.find((t) => t.id === id);
-    if (!tpl) return;
-    const softDeleted = { ...tpl, isDeleted: true, updatedAt: Date.now() };
-    await db.templates.put(softDeleted);
+  const handleDeleteChecklist = async (id: string) => {
+    const chk = checklists.find((c) => c.id === id);
+    if (!chk) return;
+    const softDeleted = { ...chk, isDeleted: true, updatedAt: Date.now() };
+    await db.checklists.put(softDeleted);
     await refreshData();
   };
 
-  // Toggle Template Pin
-  const handleTogglePinTemplate = async (id: string) => {
-    const tpl = templates.find((t) => t.id === id);
-    if (!tpl) return;
-    const updated = { ...tpl, isPinned: !tpl.isPinned, updatedAt: Date.now() };
-    await db.templates.put(updated);
+  const handleTogglePinChecklist = async (id: string) => {
+    const chk = checklists.find((c) => c.id === id);
+    if (!chk) return;
+    const updated = { ...chk, isPinned: !chk.isPinned, updatedAt: Date.now() };
+    await db.checklists.put(updated);
     await refreshData();
   };
 
-  // Add Template directly to active encounter
-  const handleInstantiateInEncounter = async (tpl: ChecklistTemplate) => {
+  // Add individual checklist to current active patient
+  const handleAddChecklistToActivePatient = async (chk: Checklist) => {
     let target = encounters.find((e) => e.id === selectedEncounterId && !e.isDeleted);
     if (!target) {
-      target = encounters.find((e) => !e.isDeleted);
+      target = encounters.find((e) => !e.isDeleted && e.status === 'active');
     }
+
     if (!target) {
-      // Create new encounter with this template
-      const newEnc: PatientEncounter = {
-        id: 'enc-' + Date.now(),
-        patientIdentifier: 'Bed 1 - New Patient',
-        chiefComplaint: 'Clinical Consult',
-        status: 'active',
-        tags: ['#consult'],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        checklists: [
-          {
-            id: 'inst-' + Date.now(),
-            templateId: tpl.id,
-            title: tpl.title,
-            institution: tpl.institution,
-            sections: JSON.parse(JSON.stringify(tpl.sections)),
-          },
-        ],
-      };
-      await handleCreateEncounter(newEnc);
-      setCurrentTab('encounters');
+      setShowNewPatientModal(true);
       return;
     }
 
     const newInstance: EncounterChecklistInstance = {
-      id: 'inst-' + Date.now(),
-      templateId: tpl.id,
-      title: tpl.title,
-      institution: tpl.institution,
-      sections: JSON.parse(JSON.stringify(tpl.sections)),
+      id: 'inst-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      templateId: chk.id,
+      title: chk.title,
+      institution: chk.institution,
+      sections: JSON.parse(JSON.stringify(chk.sections)),
     };
+
     const updated: PatientEncounter = {
       ...target,
       checklists: [...target.checklists, newInstance],
       updatedAt: Date.now(),
     };
+
     await handleUpdateEncounter(updated);
     setSelectedEncounterId(target.id);
     setCurrentTab('encounters');
   };
 
-  // Export Full Backup
+  // Clinical Template Actions
+  const handleSaveClinicalTemplate = async (tmpl: ClinicalTemplate) => {
+    await db.clinicalTemplates.put(tmpl);
+    await refreshData();
+  };
+
+  const handleDeleteClinicalTemplate = async (id: string) => {
+    const tmpl = clinicalTemplates.find((t) => t.id === id);
+    if (!tmpl) return;
+    const softDeleted = { ...tmpl, isDeleted: true, updatedAt: Date.now() };
+    await db.clinicalTemplates.put(softDeleted);
+    await refreshData();
+  };
+
+  const handleTogglePinClinicalTemplate = async (id: string) => {
+    const tmpl = clinicalTemplates.find((t) => t.id === id);
+    if (!tmpl) return;
+    const updated = { ...tmpl, isPinned: !tmpl.isPinned, updatedAt: Date.now() };
+    await db.clinicalTemplates.put(updated);
+    await refreshData();
+  };
+
+  const handleApplyClinicalTemplateToPatient = (tmpl: ClinicalTemplate) => {
+    setShowNewPatientModal(true);
+  };
+
+  // Full Backup Export/Import
   const handleExportBackup = async () => {
     const payload = await P2PSyncService.exportSyncPayload();
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -192,7 +215,6 @@ export function App() {
     URL.revokeObjectURL(url);
   };
 
-  // Import Full Backup
   const handleImportBackup = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -226,8 +248,8 @@ export function App() {
         onExit={() => setIsBedsideMode(false)}
         onOpenLlmModal={() => setLlmTarget({ encounter: currentEncounter })}
         onOpenTemplateEditor={(templateId) => {
-          const tpl = templates.find((t) => t.id === templateId);
-          if (tpl) setEditingTemplate(tpl);
+          const chk = checklists.find((c) => c.id === templateId);
+          if (chk) setEditingChecklist(chk);
         }}
       />
     );
@@ -236,10 +258,7 @@ export function App() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
       {updateInfo && updateInfo.hasUpdate && (
-        <UpdateBanner
-          updateInfo={updateInfo}
-          onDismiss={() => setUpdateInfo(null)}
-        />
+        <UpdateBanner updateInfo={updateInfo} onDismiss={() => setUpdateInfo(null)} />
       )}
 
       <Header
@@ -247,6 +266,8 @@ export function App() {
         onSelectTab={setCurrentTab}
         onOpenSearch={() => setShowSearchModal(true)}
         onOpenSync={() => setShowSyncModal(true)}
+        onOpenVault={() => setShowVaultModal(true)}
+        isVaultLocked={isVaultLocked}
         onExportBackup={handleExportBackup}
         onImportBackup={handleImportBackup}
         themeMode={themeMode}
@@ -254,11 +275,11 @@ export function App() {
       />
 
       <main className="flex-1">
-        {currentTab === 'encounters' ? (
+        {currentTab === 'encounters' && (
           <PatientEncounterView
             encounters={encounters}
             selectedEncounterId={selectedEncounterId}
-            templates={templates}
+            templates={checklists}
             onSelectEncounter={setSelectedEncounterId}
             onUpdateEncounter={handleUpdateEncounter}
             onOpenNewPatientModal={() => setShowNewPatientModal(true)}
@@ -266,22 +287,23 @@ export function App() {
             onOpenLlmModal={() => {
               if (currentEncounter) setLlmTarget({ encounter: currentEncounter });
             }}
-            onOpenTemplateEditor={(tplId) => {
-              const tpl = templates.find((t) => t.id === tplId);
-              if (tpl) setEditingTemplate(tpl);
+            onOpenTemplateEditor={(chkId) => {
+              const chk = checklists.find((c) => c.id === chkId);
+              if (chk) setEditingChecklist(chk);
             }}
             onDeleteEncounter={handleDeleteEncounter}
           />
-        ) : (
-          <TemplateManagerView
-            templates={templates}
-            folders={folders}
-            onOpenEditor={(tpl) => setEditingTemplate(tpl)}
-            onCreateTemplate={() => {
-              const newTpl: ChecklistTemplate = {
-                id: 'tpl-' + Date.now(),
-                title: 'New Clinical Checklist',
-                description: 'Custom clinical protocol',
+        )}
+
+        {currentTab === 'checklists' && (
+          <ChecklistManagerView
+            checklists={checklists}
+            onOpenEditor={(chk) => setEditingChecklist(chk)}
+            onCreateChecklist={() => {
+              const newChk: Checklist = {
+                id: 'chk-' + Date.now(),
+                title: 'New Modular Checklist',
+                description: 'Clinical protocol steps and bounds',
                 category: 'General',
                 tags: ['custom'],
                 sections: [
@@ -293,12 +315,36 @@ export function App() {
                 ],
                 updatedAt: Date.now(),
               };
-              setEditingTemplate(newTpl);
+              setEditingChecklist(newChk);
             }}
-            onTogglePin={handleTogglePinTemplate}
-            onDeleteTemplate={handleDeleteTemplate}
-            onInstantiateInEncounter={handleInstantiateInEncounter}
-            onOpenLlmModal={(tpl) => setLlmTarget({ template: tpl })}
+            onTogglePin={handleTogglePinChecklist}
+            onDeleteChecklist={handleDeleteChecklist}
+            onInstantiateInEncounter={handleAddChecklistToActivePatient}
+            onOpenLlmModal={(chk) => setLlmTarget({ checklist: chk })}
+          />
+        )}
+
+        {currentTab === 'templates' && (
+          <TemplateManagerView
+            templates={clinicalTemplates}
+            availableChecklists={checklists}
+            onOpenEditor={(tmpl) => setEditingClinicalTemplate(tmpl)}
+            onCreateTemplate={() => {
+              const newTmpl: ClinicalTemplate = {
+                id: 'tmpl-' + Date.now(),
+                title: 'New Clinical Template Bundle',
+                description: 'Bundle grouping multiple checklists and protocol guidance',
+                category: 'General',
+                tags: ['bundle'],
+                checklistIds: [],
+                protocolNotes: '### Standard Ward Guidance:\n- Step 1: Initial assessment\n- Step 2: Handoff protocol',
+                updatedAt: Date.now(),
+              };
+              setEditingClinicalTemplate(newTmpl);
+            }}
+            onTogglePin={handleTogglePinClinicalTemplate}
+            onDeleteTemplate={handleDeleteClinicalTemplate}
+            onApplyTemplateToPatient={handleApplyClinicalTemplateToPatient}
           />
         )}
       </main>
@@ -306,12 +352,20 @@ export function App() {
       {/* Modals */}
       {showSearchModal && (
         <SearchModal
-          templates={templates}
+          checklists={checklists}
+          templates={clinicalTemplates}
           encounters={encounters}
-          onSelectTemplate={(tplId) => {
-            const tpl = templates.find((t) => t.id === tplId);
-            if (tpl) {
-              setEditingTemplate(tpl);
+          onSelectChecklist={(chkId) => {
+            const chk = checklists.find((c) => c.id === chkId);
+            if (chk) {
+              setEditingChecklist(chk);
+              setCurrentTab('checklists');
+            }
+          }}
+          onSelectTemplate={(tmplId) => {
+            const tmpl = clinicalTemplates.find((t) => t.id === tmplId);
+            if (tmpl) {
+              setEditingClinicalTemplate(tmpl);
               setCurrentTab('templates');
             }
           }}
@@ -327,24 +381,44 @@ export function App() {
 
       {showNewPatientModal && (
         <NewPatientModal
-          templates={templates}
+          checklists={checklists}
+          templates={clinicalTemplates}
           onCreate={handleCreateEncounter}
           onClose={() => setShowNewPatientModal(false)}
         />
       )}
 
-      {editingTemplate && (
-        <TemplateEditorModal
-          template={editingTemplate}
-          onSave={handleSaveTemplate}
-          onClose={() => setEditingTemplate(null)}
+      {showVaultModal && (
+        <VaultModal
+          onClose={() => {
+            setShowVaultModal(false);
+            setIsVaultLocked(cryptoVault.isVaultLocked());
+          }}
+          onVaultStateChanged={refreshData}
+        />
+      )}
+
+      {editingChecklist && (
+        <ChecklistEditorModal
+          checklist={editingChecklist}
+          onSave={handleSaveChecklist}
+          onClose={() => setEditingChecklist(null)}
+        />
+      )}
+
+      {editingClinicalTemplate && (
+        <ClinicalTemplateEditorModal
+          template={editingClinicalTemplate}
+          availableChecklists={checklists}
+          onSave={handleSaveClinicalTemplate}
+          onClose={() => setEditingClinicalTemplate(null)}
         />
       )}
 
       {llmTarget && (
         <LlmModal
           encounter={llmTarget.encounter}
-          template={llmTarget.template}
+          template={llmTarget.checklist}
           onClose={() => setLlmTarget(null)}
           onApplyMarkdown={({ sections, generalNotes }) => {
             if (llmTarget.encounter) {
@@ -354,15 +428,15 @@ export function App() {
                   ...llmTarget.encounter.checklists,
                   {
                     id: 'inst-llm-' + Date.now(),
-                    templateId: 'tpl-imported',
+                    templateId: 'chk-imported',
                     title: 'Imported Findings from Chatbox',
                     sections,
                   },
                 ],
                 generalNotes: generalNotes
-                  ? (llmTarget.encounter.generalNotes
-                      ? `${llmTarget.encounter.generalNotes}\n\n${generalNotes}`
-                      : generalNotes)
+                  ? llmTarget.encounter.generalNotes
+                    ? `${llmTarget.encounter.generalNotes}\n\n${generalNotes}`
+                    : generalNotes
                   : llmTarget.encounter.generalNotes,
                 updatedAt: Date.now(),
               };

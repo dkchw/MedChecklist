@@ -1,3 +1,7 @@
+import { Checklist, ChecklistTemplate, Folder } from './checklist';
+import { ClinicalTemplate } from './template';
+import { PatientEncounter } from './patient';
+
 export interface GitHubSyncConfig {
   personalAccessToken: string;
   repoOwner: string;
@@ -26,7 +30,9 @@ export interface SyncPayload {
   version: string;
   timestamp: number;
   deviceId: string;
-  templates: import('./checklist').ChecklistTemplate[];
-  encounters: import('./patient').PatientEncounter[];
-  folders: import('./checklist').Folder[];
+  checklists?: Checklist[];
+  clinicalTemplates?: ClinicalTemplate[];
+  templates: ChecklistTemplate[]; // backwards compatibility
+  encounters: PatientEncounter[];
+  folders: Folder[];
 }

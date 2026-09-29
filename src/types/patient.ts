@@ -3,7 +3,7 @@ import { InkStroke } from './ink';
 
 export interface EncounterChecklistInstance {
   id: string;
-  templateId: string;
+  templateId: string; // Checklist ID that this instance was instantiated from
   title: string;
   institution?: string;
   sections: ChecklistSection[];
@@ -13,18 +13,22 @@ export interface EncounterChecklistInstance {
 export interface PatientEncounter {
   id: string;
   patientIdentifier: string; // e.g. "Bed 4 - Smith, J." or "Pt #8832"
+  group?: string;            // Patient group / ward / room block e.g. "ICU", "Cardiology Ward", "Emergency"
   age?: string;
   sex?: 'M' | 'F' | 'Other';
   bedNumber?: string;
   chiefComplaint: string;
-  status: 'active' | 'completed' | 'archived';
-  checklists: EncounterChecklistInstance[];
-  generalNotes?: string;
-  inkStrokes?: InkStroke[]; // Bedside handwritten notes and drawings
-  images?: MedicalImage[];  // Attached clinical images (ECG, rashes, wounds, labs)
-  links?: MedicalLink[];    // Attached reference links (UpToDate, PubMed, Guidelines)
+  status: 'active' | 'archived'; // Active for current bedside rounds, Archived for discharged/completed
+  archivedAt?: number;       // Timestamp when encounter was archived
+  templateId?: string;       // Originating ClinicalTemplate bundle ID (if instantiated from template)
+  templateTitle?: string;    // Name of template used (e.g. "Acute Coronary Syndrome Admission")
+  checklists: EncounterChecklistInstance[]; // Modular checklists attached to this patient
+  generalNotes?: string;     // Editable Markdown clinical notes / SOAP / instructions
+  inkStrokes?: InkStroke[];  // Bedside handwritten notes and pen drawings
+  images?: MedicalImage[];   // Attached clinical images (ECG, rashes, wounds, labs)
+  links?: MedicalLink[];     // Attached reference links (UpToDate, PubMed, Guidelines)
   tags: string[];
   createdAt: number;
   updatedAt: number;
-  isDeleted?: boolean; // Soft delete for conflict prevention
+  isDeleted?: boolean;       // Soft delete tombstone for conflict prevention
 }

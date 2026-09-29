@@ -1,34 +1,63 @@
 import React, { useState } from 'react';
-import { ChecklistTemplate } from '../../types/checklist';
+import { Checklist } from '../../types/checklist';
+import { ClinicalTemplate } from '../../types/template';
 import { PatientEncounter, EncounterChecklistInstance } from '../../types/patient';
-import { UserPlus, Check, X, ClipboardCheck } from 'lucide-react';
+import { UserPlus, Check, X, ClipboardCheck, Layers, Folder, FileText } from 'lucide-react';
 
 interface NewPatientModalProps {
-  templates: ChecklistTemplate[];
+  checklists: Checklist[];
+  templates: ClinicalTemplate[];
+  initialGroup?: string;
   onCreate: (encounter: PatientEncounter) => void;
   onClose: () => void;
 }
 
+const COMMON_WARDS = ['Emergency', 'ICU', 'Internal Med', 'Cardiology', 'Surgery', 'Pediatrics'];
+
 export const NewPatientModal: React.FC<NewPatientModalProps> = ({
+  checklists,
   templates,
+  initialGroup,
   onCreate,
   onClose,
 }) => {
   const [identifier, setIdentifier] = useState('');
+  const [group, setGroup] = useState(initialGroup || 'Emergency');
   const [bedNumber, setBedNumber] = useState('');
   const [age, setAge] = useState('');
   const [sex, setSex] = useState<'M' | 'F' | 'Other'>('M');
   const [chiefComplaint, setChiefComplaint] = useState('');
-  const [tagsStr, setTagsStr] = useState('#admit');
-  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>(
-    templates.filter(t => t.isPinned).map(t => t.id)
-  );
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [selectedChecklistIds, setSelectedChecklistIds] = useState<string[]>([]);
+  const [generalNotes, setGeneralNotes] = useState<string>('');
 
-  const toggleTemplate = (id: string) => {
-    if (selectedTemplateIds.includes(id)) {
-      setSelectedTemplateIds(selectedTemplateIds.filter(t => t !== id));
+  // Handle template selection change
+  const handleSelectTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    if (!templateId) {
+      return;
+    }
+    const tmpl = templates.find((t) => t.id === templateId);
+    if (tmpl) {
+      // Pre-select bundled checklists
+      setSelectedChecklistIds(tmpl.checklistIds || []);
+      // Pre-populate protocol guidance notes if notes are empty or previous template notes
+      if (tmpl.protocolNotes) {
+        setGeneralNotes((prev) => {
+          if (!prev.trim() || prev.startsWith('### Protocol Guidance:')) {
+            return `### Protocol Guidance: ${tmpl.title}\n\n${tmpl.protocolNotes}`;
+          }
+          return `${prev}\n\n### Protocol Guidance: ${tmpl.title}\n\n${tmpl.protocolNotes}`;
+        });
+      }
+    }
+  };
+
+  const toggleChecklist = (id: string) => {
+    if (selectedChecklistIds.includes(id)) {
+      setSelectedChecklistIds(selectedChecklistIds.filter((cid) => cid !== id));
     } else {
-      setSelectedTemplateIds([...selectedTemplateIds, id]);
+      setSelectedChecklistIds([...selectedChecklistIds, id]);
     }
   };
 
@@ -36,26 +65,33 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
     e.preventDefault();
     if (!identifier.trim()) return;
 
-    const chosenChecklists: EncounterChecklistInstance[] = templates
-      .filter(t => selectedTemplateIds.includes(t.id))
-      .map(t => ({
+    const chosenTemplate = templates.find((t) => t.id === selectedTemplateId);
+
+    const chosenChecklists: EncounterChecklistInstance[] = checklists
+      .filter((c) => selectedChecklistIds.includes(c.id) && !c.isDeleted)
+      .map((c) => ({
         id: 'inst-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-        templateId: t.id,
-        title: t.title,
-        institution: t.institution,
-        sections: JSON.parse(JSON.stringify(t.sections)),
+        templateId: c.id,
+        title: c.title,
+        institution: c.institution,
+        sections: JSON.parse(JSON.stringify(c.sections)),
       }));
 
     const newEncounter: PatientEncounter = {
       id: 'enc-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
       patientIdentifier: identifier.trim(),
+      group: group.trim() || undefined,
       bedNumber: bedNumber.trim() || undefined,
       age: age.trim() || undefined,
       sex,
       chiefComplaint: chiefComplaint.trim(),
       status: 'active',
+      templateId: chosenTemplate?.id,
+      templateTitle: chosenTemplate?.title,
       checklists: chosenChecklists,
-      tags: tagsStr.split(',').map(t => t.trim()).filter(Boolean),
+      generalNotes: generalNotes.trim() || undefined,
+      tags: ['#admit', group.trim() ? `#${group.trim().toLowerCase().replace(/\s+/g, '-')}` : '']
+        .filter(Boolean),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -66,15 +102,20 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] transition-colors">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[92vh] transition-colors">
+        {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl shadow-xs">
               <UserPlus className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">New Patient Encounter Box</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Create a bedside encounter dossier</p>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                New Patient Encounter Dossier
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Bundle clinical templates, atomic checklists, and ward assignment
+              </p>
             </div>
           </div>
           <button
@@ -85,7 +126,9 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+        {/* Modal Body */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1 text-slate-900 dark:text-slate-100">
+          {/* Patient Identifier */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Patient Identifier / Name *
@@ -95,14 +138,48 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
               required
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="e.g. Bed 12 - Doe, J. or Pt #4092"
+              placeholder="e.g. Doe, John or Pt #4092"
               className="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          {/* Ward / Group Assignment */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+              <Folder className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Ward / Patient Group</span>
+            </label>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {COMMON_WARDS.map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setGroup(w)}
+                  className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                    group === w
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
+              placeholder="Custom ward/group e.g. Step-down Unit, Trauma Bay 1..."
+              className="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+            />
+          </div>
+
+          {/* Bed / Room, Age, Sex */}
+          <div className="grid grid-cols-3 gap-2.5">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Bed / Room</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Bed / Room
+              </label>
               <input
                 type="text"
                 value={bedNumber}
@@ -112,7 +189,9 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Age</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Age
+              </label>
               <input
                 type="text"
                 value={age}
@@ -122,7 +201,9 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Sex</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Sex
+              </label>
               <select
                 value={sex}
                 onChange={(e) => setSex(e.target.value as any)}
@@ -135,62 +216,121 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
             </div>
           </div>
 
+          {/* Chief Complaint */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Chief Complaint / Reason for Encounter
+              Chief Complaint / Clinical Indication
             </label>
             <input
               type="text"
               value={chiefComplaint}
               onChange={(e) => setChiefComplaint(e.target.value)}
-              placeholder="e.g. Acute dyspnea, suspected pulmonary embolism"
+              placeholder="e.g. Acute chest pressure radiating to left jaw, dyspnea"
               className="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
             />
           </div>
 
+          {/* Clinical Template Bundle Selector */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
-              <span>Attach Initial Checklists & Templates:</span>
-              <span className="text-[11px] text-slate-400 dark:text-slate-500 font-normal">
-                {selectedTemplateIds.length} selected
+              <span className="flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Base Clinical Template (Bundle)</span>
+              </span>
+              <span className="text-[11px] text-slate-400 font-normal">Optional</span>
+            </label>
+            <select
+              value={selectedTemplateId}
+              onChange={(e) => handleSelectTemplate(e.target.value)}
+              className="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+            >
+              <option value="">None (Custom empty bundle)</option>
+              {templates
+                .filter((t) => !t.isDeleted)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title} ({t.checklistIds.length} checklists) - {t.category}
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          {/* Modular Checklists Selection */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <ClipboardCheck className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Attached Modular Checklists</span>
+              </span>
+              <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold">
+                {selectedChecklistIds.length} attached
               </span>
             </label>
-            <div className="space-y-1.5 max-h-44 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-2 bg-slate-50/50 dark:bg-slate-800/40">
-              {templates.filter(t => !t.isDeleted).map((t) => (
-                <div
-                  key={t.id}
-                  onClick={() => toggleTemplate(t.id)}
-                  className={`p-2 rounded-lg border text-xs cursor-pointer flex items-center justify-between transition-colors ${
-                    selectedTemplateIds.includes(t.id)
-                      ? 'bg-white dark:bg-slate-800 border-slate-900 dark:border-indigo-500 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs'
-                      : 'bg-white/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <ClipboardCheck className={`w-4 h-4 shrink-0 ${selectedTemplateIds.includes(t.id) ? 'text-slate-900 dark:text-indigo-400' : 'text-slate-400'}`} />
-                    <span className="truncate">{t.title}</span>
+            <div className="space-y-1.5 max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-2 bg-slate-50/50 dark:bg-slate-800/40">
+              {checklists
+                .filter((c) => !c.isDeleted)
+                .map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => toggleChecklist(c.id)}
+                    className={`p-2 rounded-lg border text-xs cursor-pointer flex items-center justify-between transition-colors ${
+                      selectedChecklistIds.includes(c.id)
+                        ? 'bg-white dark:bg-slate-800 border-indigo-600 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs'
+                        : 'bg-white/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <ClipboardCheck
+                        className={`w-4 h-4 shrink-0 ${
+                          selectedChecklistIds.includes(c.id)
+                            ? 'text-indigo-600 dark:text-indigo-400'
+                            : 'text-slate-400'
+                        }`}
+                      />
+                      <span className="truncate">{c.title}</span>
+                      {c.category && (
+                        <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+                          {c.category}
+                        </span>
+                      )}
+                    </div>
+                    {selectedChecklistIds.includes(c.id) && (
+                      <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                    )}
                   </div>
-                  {selectedTemplateIds.includes(t.id) && (
-                    <Check className="w-4 h-4 text-slate-900 dark:text-indigo-400 shrink-0" />
-                  )}
-                </div>
-              ))}
+                ))}
             </div>
           </div>
 
+          {/* Initial Clinical Markdown Notes */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Initial Clinical & Protocol Notes (Markdown)</span>
+            </label>
+            <textarea
+              rows={3}
+              value={generalNotes}
+              onChange={(e) => setGeneralNotes(e.target.value)}
+              placeholder="Clinical protocol directives, handoff instructions, or template guidance..."
+              className="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono resize-none"
+            />
+          </div>
+
+          {/* Submit Actions */}
           <div className="pt-2 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 rounded-xl transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 rounded-xl transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 dark:hover:bg-indigo-700 transition-colors shadow-sm"
+              className="px-5 py-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 dark:hover:bg-indigo-700 transition-colors shadow-sm"
             >
-              Create Patient Encounter
+              Create Patient Encounter Dossier
             </button>
           </div>
         </form>

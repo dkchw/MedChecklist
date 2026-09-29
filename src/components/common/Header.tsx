@@ -1,12 +1,27 @@
 import React from 'react';
-import { Stethoscope, ClipboardList, BookOpen, Search, GitBranch, Download, Upload, Sun, Moon } from 'lucide-react';
+import {
+  Stethoscope,
+  ClipboardList,
+  CheckSquare,
+  Layers,
+  Search,
+  GitBranch,
+  Download,
+  Upload,
+  Sun,
+  Moon,
+  ShieldCheck,
+  Lock
+} from 'lucide-react';
 import { ThemeMode } from '../../utils/theme';
 
 interface HeaderProps {
-  currentTab: 'encounters' | 'templates';
-  onSelectTab: (tab: 'encounters' | 'templates') => void;
+  currentTab: 'encounters' | 'checklists' | 'templates';
+  onSelectTab: (tab: 'encounters' | 'checklists' | 'templates') => void;
   onOpenSearch: () => void;
   onOpenSync: () => void;
+  onOpenVault: () => void;
+  isVaultLocked: boolean;
   onExportBackup: () => void;
   onImportBackup: () => void;
   themeMode: ThemeMode;
@@ -18,6 +33,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectTab,
   onOpenSearch,
   onOpenSync,
+  onOpenVault,
+  isVaultLocked,
   onExportBackup,
   onImportBackup,
   themeMode,
@@ -26,7 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-2.5 flex items-center justify-between transition-colors">
       {/* Brand & Mode Switcher */}
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-4 sm:gap-6">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-slate-900 dark:bg-slate-800 text-white flex items-center justify-center shadow-xs border border-slate-800 dark:border-slate-700">
             <Stethoscope className="w-4 h-4 text-emerald-400" />
@@ -41,7 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Navigation Tabs */}
+        {/* Navigation Tabs: Patients | Checklists | Templates */}
         <nav className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
           <button
             onClick={() => onSelectTab('encounters')}
@@ -51,8 +68,20 @@ export const Header: React.FC<HeaderProps> = ({
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
-            <ClipboardList className="w-3.5 h-3.5" />
-            <span>Patient Encounters</span>
+            <ClipboardList className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Patients</span>
+          </button>
+
+          <button
+            onClick={() => onSelectTab('checklists')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              currentTab === 'checklists'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <CheckSquare className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Checklists</span>
           </button>
 
           <button
@@ -63,14 +92,37 @@ export const Header: React.FC<HeaderProps> = ({
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Templates & Library</span>
+            <Layers className="w-3.5 h-3.5 text-amber-500" />
+            <span>Templates</span>
           </button>
         </nav>
       </div>
 
       {/* Right Controls */}
       <div className="flex items-center gap-2">
+        {/* Encryption at Rest Status Badge & Vault Button */}
+        <button
+          onClick={onOpenVault}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-colors border ${
+            isVaultLocked
+              ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900/60'
+              : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/60'
+          }`}
+          title="Client-Side Encryption at Rest (AES-256-GCM)"
+        >
+          {isVaultLocked ? (
+            <>
+              <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span className="hidden lg:inline">Vault Locked</span>
+            </>
+          ) : (
+            <>
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="hidden lg:inline">Encrypted at Rest</span>
+            </>
+          )}
+        </button>
+
         {/* Search */}
         <button
           onClick={onOpenSearch}
@@ -101,10 +153,10 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onOpenSync}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-medium transition-colors"
-          title="GitHub PAT & P2P Sync"
+          title="GitHub PAT & P2P E2EE Sync"
         >
           <GitBranch className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-          <span className="hidden md:inline">Sync</span>
+          <span className="hidden md:inline">Sync & P2P</span>
         </button>
 
         {/* Backup / Export */}

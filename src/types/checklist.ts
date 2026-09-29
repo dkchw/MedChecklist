@@ -34,12 +34,15 @@ export interface ChecklistSection {
   items: ChecklistItem[];
 }
 
-export interface ChecklistTemplate {
+/**
+ * Modular atomic checklist (e.g. Sepsis 1-hr Bundle, Airway Checklist, Cardiac Troponin series)
+ */
+export interface Checklist {
   id: string;
   title: string;
   description: string;
   category: string;
-  institution?: string; // e.g. "General Hospital", "Mayo Clinic Protocol"
+  institution?: string; // e.g. "Hospital Central Lab", "AHA Guidelines"
   tags: string[];
   sections: ChecklistSection[];
   isPinned?: boolean;
@@ -47,7 +50,11 @@ export interface ChecklistTemplate {
   updatedAt: number;
   isDeleted?: boolean; // soft delete for conflict prevention
   links?: MedicalLink[];
+  images?: MedicalImage[];
 }
+
+// Backwards-compatible alias for existing imports
+export type ChecklistTemplate = Checklist;
 
 export interface Folder {
   id: string;
