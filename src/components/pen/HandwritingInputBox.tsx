@@ -3,7 +3,7 @@ import getStroke from 'perfect-freehand';
 import { HandwritingOcrService, OcrResult } from '../../utils/handwritingOcr';
 import { InkStroke, StrokePoint } from '../../types/ink';
 import { isPointNearStroke, getAdaptiveInkColor } from '../../utils/inkUtils';
-import { Pen, Check, RotateCcw, X, Sparkles, ArrowRightLeft, Sliders } from 'lucide-react';
+import { Pen, Check, RotateCcw, X, Sparkles, ArrowRightLeft, Sliders, Delete } from 'lucide-react';
 
 interface HandwritingInputBoxProps {
   label?: string;
@@ -385,8 +385,8 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
         )}
       </div>
 
-      {/* Drawing Canvas Area (Retina Crisp) */}
-      <div className="relative w-full h-28 bg-slate-50 dark:bg-slate-800/90 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden cursor-crosshair touch-none">
+      {/* Drawing Canvas Area (Retina Crisp, Comfortable Height) */}
+      <div className="relative w-full h-36 sm:h-44 bg-slate-50 dark:bg-slate-800/90 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden cursor-crosshair touch-none">
         <canvas
           ref={canvasRef}
           onPointerDown={handlePointerDown}
@@ -397,46 +397,83 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
 
         {strokes.length === 0 && (
           <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-xs text-slate-400 dark:text-slate-400 italic select-none">
-            {placeholder || 'Write digits with stylus (e.g. 120/80)...'}
+            {placeholder || 'Write with stylus or finger...'}
           </div>
         )}
       </div>
 
-      {/* Quick Tap Digits Bar for 1-Tap Adjustments */}
-      <div className="flex items-center justify-between gap-1 overflow-x-auto text-[11px] font-mono py-0.5">
-        {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '/', '.'].map((d) => (
+      {/* Quick Tap Digits & Symbols Bar */}
+      <div className="flex items-center gap-1 overflow-x-auto text-[11px] font-mono py-0.5">
+        {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '/', '.', '-', '+'].map((d) => (
           <button
             key={d}
             type="button"
             onClick={() => setRecognizedText((prev) => prev + d)}
-            className="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-slate-800 dark:text-slate-200 font-bold flex items-center justify-center transition-colors border border-slate-200/80 dark:border-slate-700/80"
+            className="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-slate-800 dark:text-slate-200 font-bold flex items-center justify-center transition-colors border border-slate-200/80 dark:border-slate-700/80 shrink-0"
           >
             {d}
           </button>
         ))}
+
+        {/* Quick Backspace */}
+        <button
+          type="button"
+          onClick={() => setRecognizedText((prev) => prev.slice(0, -1))}
+          className="px-2 h-6 rounded-md bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-200 font-bold flex items-center justify-center transition-colors border border-amber-200 dark:border-amber-800 shrink-0 text-xs gap-1"
+          title="Backspace (delete last character)"
+        >
+          <Delete className="w-3 h-3" />
+          <span>⌫</span>
+        </button>
+
+        {/* Quick Space */}
+        <button
+          type="button"
+          onClick={() => setRecognizedText((prev) => prev + ' ')}
+          className="px-2 h-6 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold flex items-center justify-center transition-colors border border-slate-200 dark:border-slate-700 shrink-0 text-[10px]"
+          title="Insert space"
+        >
+          Space
+        </button>
       </div>
 
-      {/* Real-time OCR Recognition Status Bar */}
-      <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-200 dark:border-slate-800">
+      {/* Real-time OCR Recognition Status Bar with Backspace & Edit Controls */}
+      <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-200 dark:border-slate-800 flex-wrap">
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
           <input
             type="text"
             value={recognizedText}
             onChange={(e) => setRecognizedText(e.target.value)}
-            placeholder="Recognized value..."
-            className="font-mono text-xs font-bold px-2 py-1 rounded-lg border border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-950 dark:text-indigo-100 outline-none w-32 focus:ring-1 focus:ring-indigo-500"
+            placeholder="Recognized text..."
+            className="font-mono text-xs font-bold px-2 py-1 rounded-lg border border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-950 dark:text-indigo-100 outline-none w-28 sm:w-36 focus:ring-1 focus:ring-indigo-500"
           />
           {selectedUnit !== 'None' && (
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
               {selectedUnit}
             </span>
           )}
-          {ocrResult && (
-            <span className="text-[10px] text-slate-600 dark:text-slate-400 font-medium">
-              ({Math.round(ocrResult.confidence * 100)}%)
-            </span>
-          )}
+
+          {/* User Requested: Dedicated Backspace button next to recognized text box */}
+          <button
+            type="button"
+            onClick={() => setRecognizedText((prev) => prev.slice(0, -1))}
+            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-amber-300 dark:border-amber-700 shrink-0"
+            title="Backspace (delete previous character)"
+          >
+            <Delete className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span className="text-[11px]">⌫</span>
+          </button>
+
+          {/* Manual OCR button */}
+          <button
+            type="button"
+            onClick={() => runOcr(strokes)}
+            className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold transition-colors border border-indigo-200 dark:border-indigo-800 shrink-0"
+            title="Re-run OCR recognition on current handwriting"
+          >
+            OCR
+          </button>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">

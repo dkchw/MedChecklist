@@ -95,8 +95,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
 }) => {
   const [showFileManager, setShowFileManager] = useState<boolean>(!selectedEncounterId);
 
-  // Input Modes: 'keyboard' | 'box_handwriting' | 'full_handwriting'
-  const [inputMode, setInputMode] = useState<InputMode>('keyboard');
+  // Active Handwriting & OCR scratchpad target
   const [activeHandwritingTarget, setActiveHandwritingTarget] = useState<{
     label: string;
     field: string;
@@ -724,43 +723,15 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
             <span className="hidden sm:inline">{currentEncounter.isPinned ? 'Pinned' : 'Pin'}</span>
           </button>
 
-          {/* 3 Interaction Modes Switcher */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800/90 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
-            <button
-              onClick={() => setInputMode('keyboard')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                inputMode === 'keyboard'
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-              title="Standard Keyboard Input Mode"
-            >
-              <Keyboard className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Keyboard</span>
-            </button>
-
-            <button
-              onClick={() => setInputMode('box_handwriting')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                inputMode === 'box_handwriting'
-                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-              title="Handwriting in Box: click any field to write with OCR"
-            >
-              <Pen className="w-3.5 h-3.5 text-indigo-500" />
-              <span className="hidden sm:inline">Box OCR</span>
-            </button>
-
-            <button
-              onClick={onEnterPatientFacingMode}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-all"
-              title="Enter Full Bedside Handwriting Mode"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span className="hidden sm:inline">Full Inking</span>
-            </button>
-          </div>
+          {/* Full Freeform Bedside Canvas Trigger */}
+          <button
+            onClick={onEnterPatientFacingMode}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-bold transition-colors border border-emerald-200 dark:border-emerald-800 cursor-pointer shadow-2xs"
+            title="Enter Full Bedside Drawing / Freeform Canvas Mode"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>Full Canvas Inking</span>
+          </button>
 
           {/* Gallery Button */}
           {onOpenGallery && (
@@ -980,37 +951,17 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                     />
                   ) : (
                     <span
-                      onClick={() => {
-                        if (inputMode === 'box_handwriting') {
-                          setActiveHandwritingTarget({
-                            label: 'Chief Complaint',
-                            field: 'chiefComplaint',
-                            initialValue: currentEncounter.chiefComplaint,
-                            onAccept: (val) => {
-                              onUpdateEncounter({
-                                ...currentEncounter,
-                                chiefComplaint: val,
-                                updatedAt: Date.now(),
-                              });
-                            },
-                          });
-                        } else {
-                          setIsEditingComplaint(true);
-                        }
-                      }}
+                      onClick={() => setIsEditingComplaint(true)}
                       className="cursor-pointer text-slate-900 dark:text-slate-100 font-medium hover:underline"
-                      title={
-                        inputMode === 'box_handwriting'
-                          ? 'Click to write Chief Complaint with Stylus (OCR)'
-                          : 'Click to edit Chief Complaint'
-                      }
+                      title="Click to edit Chief Complaint with keyboard"
                     >
                       {currentEncounter.chiefComplaint || 'None specified (Click to add)'}
                     </span>
                   )}
 
-                  {/* Handwriting in box trigger button */}
+                  {/* Stylus Write & OCR trigger button */}
                   <button
+                    type="button"
                     onClick={() =>
                       setActiveHandwritingTarget({
                         label: 'Chief Complaint',
@@ -1025,10 +976,10 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                         },
                       })
                     }
-                    className="p-1 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 rounded-md"
+                    className="p-1 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 rounded-md transition-colors"
                     title="Write Chief Complaint with Stylus (OCR)"
                   >
-                    <Pen className="w-3 h-3" />
+                    <Pen className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -1514,18 +1465,6 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                                           e.target.value
                                         )
                                       }
-                                      onClick={() => {
-                                        if (inputMode === 'box_handwriting') {
-                                          setActiveHandwritingTarget({
-                                            label: item.text,
-                                            field: `lab-${item.id}`,
-                                            initialValue: item.labValue || '',
-                                            isNumericOnly: true,
-                                            onAccept: (val) =>
-                                              handleUpdateItemLabValue(chkIdx, secIdx, itmIdx, val),
-                                          });
-                                        }
-                                      }}
                                       placeholder="Value / BP"
                                       className="w-28 text-xs font-semibold px-2 py-0.5 pr-6 border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-100"
                                     />
@@ -1636,7 +1575,32 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
 
                             {/* Item Inline Note Editor */}
                             {activeNoteItemId === item.id && (
-                              <div className="pl-6 pt-1">
+                              <div className="pl-6 pt-1 space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-semibold text-slate-500">
+                                    Observation Note
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setActiveHandwritingTarget({
+                                        label: `Note: ${item.text}`,
+                                        field: `note-${item.id}`,
+                                        initialValue: item.note || '',
+                                        isNumericOnly: false,
+                                        onAccept: (val) => {
+                                          const prev = item.note ? item.note + ' ' : '';
+                                          handleUpdateItemNote(chkIdx, secIdx, itmIdx, prev + val);
+                                        },
+                                      })
+                                    }
+                                    className="flex items-center gap-1 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                                    title="Write note with Stylus (OCR)"
+                                  >
+                                    <Pen className="w-3 h-3" />
+                                    <span>Write & OCR</span>
+                                  </button>
+                                </div>
                                 <textarea
                                   rows={2}
                                   value={item.note || ''}
@@ -1710,6 +1674,35 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
               {/* Mode 1: Text Only (Markdown textarea) */}
               {endNoteMode === 'text' && (
                 <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                      Markdown Synthesis
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveHandwritingTarget({
+                          label: 'Clinical Notes',
+                          field: 'generalNotes',
+                          initialValue: '',
+                          isNumericOnly: false,
+                          onAccept: (val) => {
+                            const prev = currentEncounter.generalNotes ? currentEncounter.generalNotes + '\n' : '';
+                            onUpdateEncounter({
+                              ...currentEncounter,
+                              generalNotes: prev + val,
+                              updatedAt: Date.now(),
+                            });
+                          },
+                        })
+                      }
+                      className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition-colors cursor-pointer"
+                      title="Write notes with Stylus and convert to text via OCR"
+                    >
+                      <Pen className="w-3.5 h-3.5" />
+                      <span>Write & OCR</span>
+                    </button>
+                  </div>
                   <textarea
                     rows={5}
                     value={currentEncounter.generalNotes || ''}
@@ -1950,7 +1943,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
 
       {/* Floating Handwriting-in-Box Scratchpad */}
       {activeHandwritingTarget && (
-        <div className="fixed bottom-8 right-8 z-50 w-96 max-w-[90vw]">
+        <div className="fixed bottom-3 sm:bottom-8 right-2 sm:right-8 z-50 w-full max-w-[420px] px-2 sm:px-0 animate-in slide-in-from-bottom-4 duration-200">
           <HandwritingInputBox
             label={activeHandwritingTarget.label}
             value={activeHandwritingTarget.initialValue}

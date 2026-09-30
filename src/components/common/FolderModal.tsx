@@ -74,10 +74,11 @@ export const FolderModal: React.FC<FolderModalProps> = ({
       newFolderName.trim(),
       newFolderType,
       newFolderColor,
-      newFolderType === 'ward' ? parentFacilityId : undefined,
+      parentFacilityId || undefined,
       newFolderType === 'ward' ? parentFacility?.name : undefined
     );
     setNewFolderName('');
+    setParentFacilityId('');
   };
 
   const handleStartRename = (f: FolderItem) => {
@@ -190,6 +191,29 @@ export const FolderModal: React.FC<FolderModalProps> = ({
                       🏥 {fac.name}
                     </option>
                   ))}
+                </select>
+              </div>
+            )}
+
+            {/* Parent Folder Selector for Knowledge, Checklists, Templates, Specialties */}
+            {newFolderType !== 'facility' && newFolderType !== 'ward' && (
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                  Nest Under Parent Folder (Optional):
+                </label>
+                <select
+                  value={parentFacilityId}
+                  onChange={(e) => setParentFacilityId(e.target.value)}
+                  className="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-hidden focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="">None (Top-Level Folder)</option>
+                  {folders
+                    .filter((f) => f.type === newFolderType || f.type === 'knowledge')
+                    .map((fol) => (
+                      <option key={fol.id} value={fol.id}>
+                        📁 {fol.parentId ? `└─ ${fol.name}` : fol.name}
+                      </option>
+                    ))}
                 </select>
               </div>
             )}

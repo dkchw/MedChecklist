@@ -151,7 +151,7 @@ export function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isSidebarOpen, showSearchModal, showSyncModal, showSettingsModal, showNewPatientModal, showVaultModal, showFolderModal, showGalleryModal, editingChecklist, editingClinicalTemplate, llmTarget]);
 
-  // Touch Swipe Gesture Listener (Swipe right from left edge to open sidebar, swipe left to close)
+  // Touch Swipe Gesture Listener (Swipe right from left edge/area to open sidebar, swipe left to close)
   useEffect(() => {
     let touchStartX = 0;
     let touchStartY = 0;
@@ -167,14 +167,17 @@ export function App() {
       const deltaX = touchEndX - touchStartX;
       const deltaY = touchEndY - touchStartY;
 
-      // Ensure horizontal swipe (minimal vertical drift)
-      if (Math.abs(deltaY) < 70) {
-        // Edge swipe right (< 50px from left edge) opens sidebar
-        if (!isSidebarOpen && touchStartX < 50 && deltaX > 60) {
+      // Allow natural thumb swipe (horizontal movement significantly dominates or minimal vertical drift)
+      const isHorizontalSwipe = Math.abs(deltaX) > Math.abs(deltaY) * 0.7 && Math.abs(deltaY) < 120;
+
+      if (isHorizontalSwipe) {
+        // Swipe right from anywhere in left 35% of the screen (or first 150px) opens sidebar
+        const maxStartX = Math.max(150, window.innerWidth * 0.35);
+        if (!isSidebarOpen && touchStartX < maxStartX && deltaX > 40) {
           setIsSidebarOpen(true);
         }
         // Swipe left when sidebar is open closes it
-        else if (isSidebarOpen && deltaX < -60) {
+        else if (isSidebarOpen && deltaX < -40) {
           setIsSidebarOpen(false);
         }
       }
@@ -455,7 +458,7 @@ export function App() {
   }, [folders, encounters]);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
+    <div className="h-screen max-h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
       {updateInfo && updateInfo.hasUpdate && (
         <UpdateBanner updateInfo={updateInfo} onDismiss={() => setUpdateInfo(null)} />
       )}
@@ -500,7 +503,7 @@ export function App() {
         onToggleTheme={handleToggleTheme}
       />
 
-      <main className="flex-1 min-h-0">
+      <main className={`flex-1 flex flex-col min-h-0 ${activeTab.type === 'knowledge' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
         {activeTab.type === 'encounters' && (
           <PatientEncounterView
             encounters={encounters}
