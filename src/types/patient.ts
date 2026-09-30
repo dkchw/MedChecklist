@@ -32,6 +32,7 @@ export interface PatientEncounter {
   images?: MedicalImage[];   // Attached clinical images (ECG, rashes, wounds, labs)
   links?: MedicalLink[];     // Attached reference links (UpToDate, PubMed, Guidelines)
   tags: string[];
+  isPinned?: boolean;        // Starred/pinned for immediate bedside quick access
   createdAt: number;
   updatedAt: number;
   isDeleted?: boolean;       // Soft delete tombstone for conflict prevention

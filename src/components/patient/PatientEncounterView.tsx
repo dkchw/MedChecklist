@@ -49,14 +49,25 @@ import { AnonymizeShareModal } from './AnonymizeShareModal';
 import { PenCanvas } from '../pen/PenCanvas';
 import { HandwritingOcrService } from '../../utils/handwritingOcr';
 import { PenTool as PenToolType } from '../../types/ink';
+import { FolderItem } from '../../types/tab';
+import { ClinicalFileManager, FileItem } from '../common/ClinicalFileManager';
 
 interface PatientEncounterViewProps {
   encounters: PatientEncounter[];
   selectedEncounterId: string | null;
   templates: ChecklistTemplate[];
+  folders?: FolderItem[];
+  onCreateFolder?: (
+    name: string,
+    type: FolderItem['type'],
+    color?: string,
+    parentId?: string,
+    facilityName?: string,
+    wardName?: string
+  ) => void;
   onSelectEncounter: (id: string) => void;
   onUpdateEncounter: (updated: PatientEncounter) => void;
-  onOpenNewPatientModal: () => void;
+  onOpenNewPatientModal: (facility?: string, ward?: string) => void;
   onEnterPatientFacingMode: () => void;
   onOpenLlmModal: () => void;
   onOpenTemplateEditor: (templateId: string) => void;
@@ -70,6 +81,8 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
   encounters,
   selectedEncounterId,
   templates,
+  folders = [],
+  onCreateFolder,
   onSelectEncounter,
   onUpdateEncounter,
   onOpenNewPatientModal,
@@ -79,6 +92,8 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
   onDeleteEncounter,
   onOpenGallery,
 }) => {
+  const [showFileManager, setShowFileManager] = useState<boolean>(!selectedEncounterId);
+
   // Input Modes: 'keyboard' | 'box_handwriting' | 'full_handwriting'
   const [inputMode, setInputMode] = useState<InputMode>('keyboard');
   const [activeHandwritingTarget, setActiveHandwritingTarget] = useState<{
@@ -95,6 +110,13 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all');
   const [isEditingFacility, setIsEditingFacility] = useState<boolean>(false);
   const [isEditingGroup, setIsEditingGroup] = useState<boolean>(false);
+
+  // Keep file manager closed when an encounter is selected
+  React.useEffect(() => {
+    if (selectedEncounterId) {
+      setShowFileManager(false);
+    }
+  }, [selectedEncounterId]);
 
   // Clinical Recall Popover state
   const [activeRecall, setActiveRecall] = useState<{
@@ -141,23 +163,52 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
   const [copiedDefault, setCopiedDefault] = useState<boolean>(false);
   const [activeNoteItemId, setActiveNoteItemId] = useState<string | null>(null);
 
-  // Extract unique facilities (Hospitals / Clinics)
-  const availableFacilities = Array.from(
-    new Set(
-      encounters
-        .filter((e) => !e.isDeleted && e.facility)
-        .map((e) => e.facility!)
-    )
-  );
+  // Extract unique facilities (Hospitals / Clinics) from folders, encounters, and defaults
+  const availableFacilities = React.useMemo(() => {
+    return Array.from(
+      new Set([
+        ...folders.filter((f) => f.type === 'facility').map((f) => f.name),
+        ...encounters.filter((e) => !e.isDeleted && e.facility).map((e) => e.facility!),
+        'General Hospital',
+        'St. Jude Medical Center',
+        'City Medical Center',
+      ])
+    );
+  }, [folders, encounters]);
 
   // Extract unique patient groups / wards
-  const availableGroups = Array.from(
-    new Set(
-      encounters
-        .filter((e) => !e.isDeleted && e.group)
-        .map((e) => e.group!)
-    )
-  );
+  const availableGroups = React.useMemo(() => {
+    return Array.from(
+      new Set([
+        ...folders.filter((f) => f.type === 'ward').map((f) => f.name),
+        ...encounters.filter((e) => !e.isDeleted && e.group).map((e) => e.group!),
+        'Emergency',
+        'ICU',
+        'Internal Med',
+        'Cardiology',
+      ])
+    );
+  }, [folders, encounters]);
+
+  // Convert encounters into FileItem[] for ClinicalFileManager
+  const fileItems: FileItem[] = React.useMemo(() => {
+    return encounters
+      .filter((e) => !e.isDeleted)
+      .map((e) => ({
+        id: e.id,
+        title: e.patientIdentifier,
+        subtitle: e.chiefComplaint,
+        facility: e.facility,
+        ward: e.group,
+        bedNumber: e.bedNumber,
+        status: e.status || 'active',
+        tags: e.tags,
+        isPinned: e.isPinned,
+        updatedAt: e.updatedAt || e.createdAt,
+        metadata: `${e.checklists?.length || 0} Protocols`,
+        rawItem: e,
+      }));
+  }, [encounters]);
 
   // Filter encounters by status (active vs archived), facility, and ward group
   const visibleEncounters = encounters.filter((e) => {
@@ -511,8 +562,103 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
     } catch {}
   };
 
+  if (showFileManager || !currentEncounter) {
+    return (
+      <ClinicalFileManager
+        title="Patients"
+        mode="encounters"
+        items={fileItems}
+        folders={folders}
+        selectedFacility={selectedFacilityFilter === 'all' ? undefined : selectedFacilityFilter}
+        selectedWard={selectedGroupFilter === 'all' ? undefined : selectedGroupFilter}
+        onSelectFolder={(_, fac, ward) => {
+          setSelectedFacilityFilter(fac || 'all');
+          setSelectedGroupFilter(ward || 'all');
+        }}
+        onOpenItem={(item) => {
+          onSelectEncounter(item.id);
+          setShowFileManager(false);
+        }}
+        onNewItem={(fac, ward) => {
+          onOpenNewPatientModal(fac, ward);
+        }}
+        onCreateFolder={onCreateFolder}
+        onTogglePinItem={(item) => {
+          const enc = item.rawItem as PatientEncounter;
+          onUpdateEncounter({ ...enc, isPinned: !enc.isPinned, updatedAt: Date.now() });
+        }}
+        onDeleteItem={(item) => onDeleteEncounter(item.id)}
+        statusFilter={statusFilter}
+        onChangeStatusFilter={(st) => setStatusFilter(st as 'active' | 'archived')}
+        statusOptions={[
+          {
+            id: 'active',
+            label: 'Active Rounds',
+            count: encounters.filter((e) => !e.isDeleted && (e.status || 'active') === 'active').length,
+          },
+          {
+            id: 'archived',
+            label: 'Archived',
+            count: encounters.filter((e) => !e.isDeleted && e.status === 'archived').length,
+          },
+        ]}
+      />
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+      {/* File Explorer Navigation & Patient Switcher Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs transition-colors">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <button
+            type="button"
+            onClick={() => setShowFileManager(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-xl text-xs font-semibold transition-colors cursor-pointer border border-slate-200/60 dark:border-slate-700 shrink-0"
+          >
+            <Folder className="w-3.5 h-3.5 text-cyan-500" />
+            <span>← File Explorer</span>
+          </button>
+
+          <div className="text-xs font-mono text-slate-500 dark:text-slate-400 flex items-center gap-1.5 truncate">
+            <span>{currentEncounter.facility || 'Facility'}</span>
+            <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
+            <span>{currentEncounter.group || 'Ward'}</span>
+            <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
+            <span className="font-bold text-slate-900 dark:text-slate-100 truncate">{currentEncounter.patientIdentifier}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Quick Switch Patient in Same Ward */}
+          <select
+            value={currentEncounter.id}
+            onChange={(e) => onSelectEncounter(e.target.value)}
+            className="text-xs px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none"
+          >
+            {visibleEncounters.map((enc) => (
+              <option key={enc.id} value={enc.id}>
+                {enc.patientIdentifier} {enc.bedNumber ? `(Bed ${enc.bedNumber})` : ''}
+              </option>
+            ))}
+          </select>
+
+          {/* Pin Button */}
+          <button
+            type="button"
+            onClick={() => onUpdateEncounter({ ...currentEncounter, isPinned: !currentEncounter.isPinned, updatedAt: Date.now() })}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+              currentEncounter.isPinned
+                ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:text-amber-500'
+            }`}
+            title={currentEncounter.isPinned ? 'Pinned to top quick-access' : 'Pin to top quick-access'}
+          >
+            <Star className={`w-3.5 h-3.5 ${currentEncounter.isPinned ? 'fill-current text-amber-400' : ''}`} />
+            <span className="hidden sm:inline">{currentEncounter.isPinned ? 'Pinned' : 'Pin'}</span>
+          </button>
+        </div>
+      </div>
       {/* 1. Status Filter Tabs & Ward Filter Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
         <div className="flex items-center gap-2">
@@ -698,7 +844,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
 
         {statusFilter === 'active' && (
           <button
-            onClick={onOpenNewPatientModal}
+            onClick={() => onOpenNewPatientModal()}
             className="px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap border border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-600 hover:bg-white dark:hover:bg-slate-900 flex items-center gap-1 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -722,7 +868,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
           </p>
           {statusFilter === 'active' && (
             <button
-              onClick={onOpenNewPatientModal}
+              onClick={() => onOpenNewPatientModal()}
               className="px-4 py-2 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-colors shadow-sm inline-flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4" />
@@ -751,27 +897,37 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                 <div className="relative inline-flex items-center">
                   {isEditingFacility ? (
                     <div className="flex items-center gap-1">
-                      <input
-                        type="text"
-                        defaultValue={currentEncounter.facility || ''}
-                        placeholder="Enter Hospital / Clinic..."
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleUpdateFacility((e.target as HTMLInputElement).value);
-                          } else if (e.key === 'Escape') {
-                            setIsEditingFacility(false);
-                          }
-                        }}
-                        onBlur={(e) => handleUpdateFacility(e.target.value)}
+                      <select
                         autoFocus
+                        defaultValue={currentEncounter.facility || ''}
+                        onChange={(e) => {
+                          if (e.target.value === '__new__') {
+                            const custom = prompt('Enter new Hospital / Clinic name:');
+                            if (custom && custom.trim()) {
+                              handleUpdateFacility(custom.trim());
+                            }
+                          } else {
+                            handleUpdateFacility(e.target.value);
+                          }
+                          setIsEditingFacility(false);
+                        }}
+                        onBlur={() => setIsEditingFacility(false)}
                         className="text-xs px-2 py-0.5 border border-indigo-400 dark:border-indigo-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
-                      />
+                      >
+                        <option value="">Select Facility...</option>
+                        {availableFacilities.map((fac) => (
+                          <option key={fac} value={fac}>
+                            {fac}
+                          </option>
+                        ))}
+                        <option value="__new__">+ Add New Facility...</option>
+                      </select>
                     </div>
                   ) : (
                     <button
                       onClick={() => setIsEditingFacility(true)}
-                      className="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-medium px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition-colors"
-                      title="Click to edit Hospital / Clinic"
+                      className="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-medium px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
+                      title="Click to choose or change Hospital / Clinic"
                     >
                       <Building2 className="w-3 h-3 text-indigo-500" />
                       <span>{currentEncounter.facility || 'Assign Facility'}</span>
@@ -783,26 +939,36 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                 <div className="relative inline-flex items-center">
                   {isEditingGroup ? (
                     <div className="flex items-center gap-1">
-                      <input
-                        type="text"
-                        defaultValue={currentEncounter.group || ''}
-                        placeholder="Enter Ward/Group..."
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleUpdateGroup((e.target as HTMLInputElement).value);
-                          } else if (e.key === 'Escape') {
-                            setIsEditingGroup(false);
-                          }
-                        }}
-                        onBlur={(e) => handleUpdateGroup(e.target.value)}
+                      <select
                         autoFocus
+                        defaultValue={currentEncounter.group || ''}
+                        onChange={(e) => {
+                          if (e.target.value === '__new__') {
+                            const custom = prompt('Enter new Ward / Unit name:');
+                            if (custom && custom.trim()) {
+                              handleUpdateGroup(custom.trim());
+                            }
+                          } else {
+                            handleUpdateGroup(e.target.value);
+                          }
+                          setIsEditingGroup(false);
+                        }}
+                        onBlur={() => setIsEditingGroup(false)}
                         className="text-xs px-2 py-0.5 border border-indigo-300 dark:border-indigo-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
-                      />
+                      >
+                        <option value="">Select Ward...</option>
+                        {availableGroups.map((grp) => (
+                          <option key={grp} value={grp}>
+                            {grp}
+                          </option>
+                        ))}
+                        <option value="__new__">+ Add New Ward...</option>
+                      </select>
                     </div>
                   ) : (
                     <button
                       onClick={() => setIsEditingGroup(true)}
-                      className="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition-colors"
+                      className="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
                       title="Click to change Ward / Patient Group"
                     >
                       <Folder className="w-3 h-3 text-indigo-500" />

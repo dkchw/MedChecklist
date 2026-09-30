@@ -19,6 +19,7 @@ import { NewPatientModal } from './components/patient/NewPatientModal';
 import { VaultModal } from './components/security/VaultModal';
 import { ImageGalleryModal } from './components/patient/ImageGalleryModal';
 import { KnowledgeHubView } from './components/knowledge/KnowledgeHubView';
+import { SettingsModal } from './components/common/SettingsModal';
 import { P2PSyncService } from './utils/p2pSync';
 import { cryptoVault } from './utils/cryptoVault';
 import { checkForGitHubUpdate, UpdateCheckResult } from './utils/githubUpdater';
@@ -41,6 +42,9 @@ export function App() {
   // Security & Vault State
   const [isVaultLocked, setIsVaultLocked] = useState<boolean>(cryptoVault.isVaultLocked());
   const [showVaultModal, setShowVaultModal] = useState<boolean>(false);
+  const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
+  const [newPatientFacility, setNewPatientFacility] = useState<string | undefined>();
+  const [newPatientWard, setNewPatientWard] = useState<string | undefined>();
 
   // Modals & Mode States
   const [isBedsideMode, setIsBedsideMode] = useState<boolean>(false);
@@ -386,6 +390,18 @@ export function App() {
   // Active Tab Type
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0] || DEFAULT_TABS[0];
 
+  const allFacilityNames = React.useMemo(() => {
+    const fromFolders = folders.filter((f) => f.type === 'facility').map((f) => f.name);
+    const fromEncounters = encounters.map((e) => e.facility).filter(Boolean) as string[];
+    return Array.from(new Set([...fromFolders, ...fromEncounters, 'General Hospital', 'St. Jude Medical Center']));
+  }, [folders, encounters]);
+
+  const allWardNames = React.useMemo(() => {
+    const fromFolders = folders.filter((f) => f.type === 'ward').map((f) => f.name);
+    const fromEncounters = encounters.map((e) => e.group).filter(Boolean) as string[];
+    return Array.from(new Set([...fromFolders, ...fromEncounters, 'Emergency', 'ICU', 'Internal Med', 'Cardiology']));
+  }, [folders, encounters]);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
       {updateInfo && updateInfo.hasUpdate && (
@@ -410,6 +426,7 @@ export function App() {
         themeMode={themeMode}
         onToggleTheme={handleToggleTheme}
         onCheckUpdate={handleCheckUpdate}
+        onOpenSettings={() => setShowSettingsModal(true)}
       />
 
       <main className="flex-1">
@@ -418,9 +435,15 @@ export function App() {
             encounters={encounters}
             selectedEncounterId={selectedEncounterId}
             templates={checklists}
+            folders={folders}
+            onCreateFolder={handleCreateFolder}
             onSelectEncounter={setSelectedEncounterId}
             onUpdateEncounter={handleUpdateEncounter}
-            onOpenNewPatientModal={() => setShowNewPatientModal(true)}
+            onOpenNewPatientModal={(fac, ward) => {
+              setNewPatientFacility(fac);
+              setNewPatientWard(ward);
+              setShowNewPatientModal(true);
+            }}
             onEnterPatientFacingMode={() => setIsBedsideMode(true)}
             onOpenLlmModal={() => {
               if (currentEncounter) setLlmTarget({ encounter: currentEncounter });
@@ -544,12 +567,40 @@ export function App() {
 
       {showSyncModal && <SyncModal onClose={() => setShowSyncModal(false)} />}
 
+      {showSettingsModal && (
+        <SettingsModal
+          themeMode={themeMode}
+          onToggleTheme={handleToggleTheme}
+          onOpenVault={() => setShowVaultModal(true)}
+          onOpenSync={() => setShowSyncModal(true)}
+          onExportBackup={handleExportBackup}
+          onImportBackup={handleImportBackup}
+          onClose={() => setShowSettingsModal(false)}
+        />
+      )}
+
       {showNewPatientModal && (
         <NewPatientModal
           checklists={checklists}
           templates={clinicalTemplates}
-          onCreate={handleCreateEncounter}
-          onClose={() => setShowNewPatientModal(false)}
+          facilities={allFacilityNames}
+          wards={allWardNames}
+          initialFacility={newPatientFacility}
+          initialGroup={newPatientWard}
+          onCreate={async (enc) => {
+            if (enc.facility && !folders.some((f) => f.type === 'facility' && f.name.toLowerCase() === enc.facility!.toLowerCase())) {
+              await handleCreateFolder(enc.facility, 'facility');
+            }
+            if (enc.group && !folders.some((f) => f.type === 'ward' && f.name.toLowerCase() === enc.group!.toLowerCase())) {
+              await handleCreateFolder(enc.group, 'ward', undefined, enc.facility);
+            }
+            handleCreateEncounter(enc);
+          }}
+          onClose={() => {
+            setShowNewPatientModal(false);
+            setNewPatientFacility(undefined);
+            setNewPatientWard(undefined);
+          }}
         />
       )}
 

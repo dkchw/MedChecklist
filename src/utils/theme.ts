@@ -18,7 +18,9 @@ export function applyTheme(mode: ThemeMode) {
 
   if (isDark) {
     root.classList.add('dark');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#1a1b26');
   } else {
     root.classList.remove('dark');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#ffffff');
   }
 }

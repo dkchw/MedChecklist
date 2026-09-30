@@ -23,6 +23,7 @@ import {
   GraduationCap,
   BookmarkCheck,
   HardDrive,
+  Star,
 } from 'lucide-react';
 import { KnowledgeNote } from '../../types/knowledge';
 import { Checklist, Folder as ChecklistFolder } from '../../types/checklist';
@@ -124,6 +125,15 @@ Write your lecture or bedside study notes here.
     if (selectedNoteId === noteId) {
       setSelectedNoteId(remaining.length > 0 ? remaining[0].id : null);
     }
+  };
+
+  // Toggle pin note
+  const handleTogglePinNote = async (noteId: string) => {
+    const target = notes.find((n) => n.id === noteId);
+    if (!target) return;
+    const updated = { ...target, isPinned: !target.isPinned, updatedAt: Date.now() };
+    setNotes((prev) => prev.map((n) => (n.id === noteId ? updated : n)));
+    await db.knowledgeNotes.put(updated);
   };
 
   // Export note as Markdown (.md)
@@ -556,7 +566,7 @@ Write your lecture or bedside study notes here.
           </div>
 
           {/* Notes List */}
-          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+          <div className="flex-1 overflow-y-auto space-y-2 pr-1">
             {filteredNotes.length === 0 ? (
               <div className="p-8 text-center text-slate-400">
                 <FileText className="w-8 h-8 mx-auto mb-1.5 text-slate-300 dark:text-slate-600" />
@@ -564,66 +574,176 @@ Write your lecture or bedside study notes here.
                 <p className="text-[11px]">Click "+ New Note" to start writing.</p>
               </div>
             ) : (
-              filteredNotes.map((note) => {
-                const isSelected = selectedNote?.id === note.id;
-                return (
-                  <div
-                    key={note.id}
-                    onClick={() => setSelectedNoteId(note.id)}
-                    className={`p-3 rounded-2xl border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800 shadow-xs'
-                        : 'bg-white dark:bg-slate-850/60 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <h3
-                        className={`text-xs font-bold truncate ${
-                          isSelected
-                            ? 'text-indigo-950 dark:text-white'
-                            : 'text-slate-800 dark:text-slate-200'
-                        }`}
-                      >
-                        {note.title}
-                      </h3>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteNote(note.id);
-                        }}
-                        className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
-                        title="Delete Note"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
+              <>
+                {/* Pinned Notes Section */}
+                {filteredNotes.some((n) => n.isPinned) && (
+                  <div className="space-y-1.5 mb-3">
+                    <div className="flex items-center gap-1.5 px-1 text-[10px] font-bold uppercase tracking-wider text-amber-500">
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                      <span>Pinned Notes ({filteredNotes.filter((n) => n.isPinned).length})</span>
                     </div>
+                    {filteredNotes
+                      .filter((n) => n.isPinned)
+                      .map((note) => {
+                        const isSelected = selectedNote?.id === note.id;
+                        return (
+                          <div
+                            key={note.id}
+                            onClick={() => setSelectedNoteId(note.id)}
+                            className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800 shadow-xs'
+                                : 'bg-white dark:bg-slate-850/60 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <h3
+                                className={`text-xs font-bold truncate ${
+                                  isSelected
+                                    ? 'text-indigo-950 dark:text-white'
+                                    : 'text-slate-800 dark:text-slate-200'
+                                }`}
+                              >
+                                {note.title}
+                              </h3>
+                              <div className="flex items-center gap-0.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleTogglePinNote(note.id);
+                                  }}
+                                  className="p-1 text-amber-500 hover:text-amber-400 rounded transition-colors"
+                                  title="Unpin Note"
+                                >
+                                  <Star className="w-3 h-3 fill-amber-400" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteNote(note.id);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
+                                  title="Delete Note"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
 
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1">
-                      {note.content.replace(/[#*`\->]/g, '').trim()}
-                    </p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1">
+                              {note.content.replace(/[#*`\->]/g, '').trim()}
+                            </p>
 
-                    <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-400">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-2.5 h-2.5" />
-                        {new Date(note.updatedAt).toLocaleDateString()}
-                      </span>
-                      {note.tags && note.tags.length > 0 && (
-                        <div className="flex items-center gap-1">
-                          {note.tags.slice(0, 2).map((t) => (
-                            <span
-                              key={t}
-                              className="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 rounded text-slate-600 dark:text-slate-300"
-                            >
-                              #{t}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                            <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-400">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-2.5 h-2.5" />
+                                {new Date(note.updatedAt).toLocaleDateString()}
+                              </span>
+                              {note.tags && note.tags.length > 0 && (
+                                <div className="flex items-center gap-1">
+                                  {note.tags.slice(0, 2).map((t) => (
+                                    <span
+                                      key={t}
+                                      className="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 rounded text-slate-600 dark:text-slate-300"
+                                    >
+                                      #{t}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                   </div>
-                );
-              })
+                )}
+
+                {/* All / Unpinned Notes Section */}
+                <div className="space-y-1.5">
+                  {filteredNotes.some((n) => n.isPinned) && (
+                    <div className="px-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                      All Notes ({filteredNotes.filter((n) => !n.isPinned).length})
+                    </div>
+                  )}
+                  {filteredNotes
+                    .filter((n) => !filteredNotes.some((item) => item.isPinned) || !n.isPinned)
+                    .map((note) => {
+                      const isSelected = selectedNote?.id === note.id;
+                      return (
+                        <div
+                          key={note.id}
+                          onClick={() => setSelectedNoteId(note.id)}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800 shadow-xs'
+                              : 'bg-white dark:bg-slate-850/60 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <h3
+                              className={`text-xs font-bold truncate ${
+                                isSelected
+                                  ? 'text-indigo-950 dark:text-white'
+                                  : 'text-slate-800 dark:text-slate-200'
+                              }`}
+                            >
+                              {note.title}
+                            </h3>
+                            <div className="flex items-center gap-0.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTogglePinNote(note.id);
+                                }}
+                                className="p-1 text-slate-400 hover:text-amber-500 rounded transition-colors"
+                                title="Pin Note"
+                              >
+                                <Star className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteNote(note.id);
+                                }}
+                                className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
+                                title="Delete Note"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1">
+                            {note.content.replace(/[#*`\->]/g, '').trim()}
+                          </p>
+
+                          <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-400">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-2.5 h-2.5" />
+                              {new Date(note.updatedAt).toLocaleDateString()}
+                            </span>
+                            {note.tags && note.tags.length > 0 && (
+                              <div className="flex items-center gap-1">
+                                {note.tags.slice(0, 2).map((t) => (
+                                  <span
+                                    key={t}
+                                    className="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 rounded text-slate-600 dark:text-slate-300"
+                                  >
+                                    #{t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -718,6 +838,20 @@ Write your lecture or bedside study notes here.
                 >
                   <LinkIcon className="w-3 h-3" />
                   <span>Link Protocol</span>
+                </button>
+
+                {/* Pin Note */}
+                <button
+                  type="button"
+                  onClick={() => handleTogglePinNote(selectedNote.id)}
+                  className={`p-1.5 rounded-xl transition-colors border ${
+                    selectedNote.isPinned
+                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-500 border-amber-300 dark:border-amber-700'
+                      : 'text-slate-400 hover:text-amber-500 border-slate-200 dark:border-slate-700'
+                  }`}
+                  title={selectedNote.isPinned ? 'Unpin Note' : 'Pin Note'}
+                >
+                  <Star className={`w-3.5 h-3.5 ${selectedNote.isPinned ? 'fill-amber-400 text-amber-400' : ''}`} />
                 </button>
 
                 {/* Export Markdown */}

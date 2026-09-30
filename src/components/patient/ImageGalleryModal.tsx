@@ -442,7 +442,7 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
                 return (
                   <div
                     key={img.id}
-                    className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-2xs hover:shadow-md transition-all flex flex-col group"
+                    className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-2xs hover:shadow-md transition-all flex flex-col group min-w-0 max-w-full"
                   >
                     {/* Thumbnail */}
                     <div
@@ -456,16 +456,16 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
                       />
 
                       {/* Anonymization Status Badge */}
-                      <div className="absolute top-2 left-2 z-10">
+                      <div className="absolute top-2 left-2 z-10 max-w-[85%]">
                         {isAnonymized ? (
-                          <span className="text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/80 px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs">
-                            <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                            <span>Anonymized</span>
+                          <span className="text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/80 px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs truncate">
+                            <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
+                            <span className="truncate">Anonymized</span>
                           </span>
                         ) : (
-                          <span className="text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-700/80 px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs">
-                            <AlertTriangle className="w-3 h-3 text-amber-400" />
-                            <span>Needs Redaction</span>
+                          <span className="text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-700/80 px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs truncate">
+                            <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                            <span className="truncate">Needs Redaction</span>
                           </span>
                         )}
                       </div>
@@ -490,19 +490,19 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
                     </div>
 
                     {/* Info & Tags */}
-                    <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between gap-1">
-                          <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                    <div className="p-3 space-y-2 flex-1 flex flex-col justify-between min-w-0">
+                      <div className="min-w-0">
+                        <div className="flex items-center justify-between gap-1 min-w-0">
+                          <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate min-w-0 flex-1">
                             {img.patientIdentifier}
                           </div>
                           {img.bedNumber && (
-                            <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1 rounded">
+                            <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1 rounded shrink-0">
                               Bed {img.bedNumber}
                             </span>
                           )}
                         </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate min-w-0 break-words mt-0.5">
                           {img.caption || 'Clinical Snapshot'}
                         </div>
                       </div>
@@ -531,24 +531,24 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
                       </div>
 
                       {/* Tags List */}
-                      <div className="space-y-1.5 pt-1">
-                        <div className="flex flex-wrap gap-1">
+                      <div className="space-y-1.5 pt-1 min-w-0">
+                        <div className="flex flex-wrap gap-1 min-w-0">
                           {(img.tags || []).map((tag) => (
                             <span
                               key={tag}
-                              className={`text-[10px] px-1.5 py-0.2 rounded-md font-medium flex items-center gap-1 border ${
+                              className={`text-[10px] px-1.5 py-0.2 rounded-md font-medium flex items-center gap-1 border max-w-full truncate ${
                                 tag === 'anonymized' || tag === 'redacted'
                                   ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/40'
                                   : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-100 dark:border-indigo-900/40'
                               }`}
                             >
-                              <span>#{tag}</span>
+                              <span className="truncate max-w-[120px]">#{tag}</span>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleRemoveTag(img, tag);
                                 }}
-                                className="hover:text-red-500"
+                                className="hover:text-red-500 shrink-0"
                               >
                                 ×
                               </button>
@@ -606,32 +606,32 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="relative max-w-4xl max-h-[92vh] flex flex-col items-center bg-slate-950 rounded-2xl p-4 border border-slate-800"
+              className="relative max-w-4xl w-full max-h-[92vh] flex flex-col items-center bg-slate-950 rounded-2xl p-4 border border-slate-800 overflow-y-auto"
             >
               <img
                 src={activeLightbox.url}
                 alt={activeLightbox.caption || 'Enlarged Image'}
-                className="max-h-[72vh] max-w-full rounded-xl object-contain mb-3"
+                className="max-h-[70vh] max-w-full rounded-xl object-contain mb-3"
               />
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full text-white text-xs gap-3">
-                <div>
-                  <div className="font-bold text-sm flex items-center gap-2">
-                    <span>{activeLightbox.caption || 'Clinical Snapshot'}</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full text-white text-xs gap-3 min-w-0">
+                <div className="min-w-0 flex-1 break-words">
+                  <div className="font-bold text-sm flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="break-words">{activeLightbox.caption || 'Clinical Snapshot'}</span>
                     {(activeLightbox.tags || []).includes('anonymized') ? (
-                      <span className="text-[10px] bg-emerald-900/80 text-emerald-300 px-2 py-0.2 rounded-full font-mono flex items-center gap-1 border border-emerald-700">
+                      <span className="text-[10px] bg-emerald-900/80 text-emerald-300 px-2 py-0.2 rounded-full font-mono flex items-center gap-1 border border-emerald-700 shrink-0">
                         <ShieldCheck className="w-3 h-3" />
                         <span>Anonymized</span>
                       </span>
                     ) : (
-                      <span className="text-[10px] bg-amber-900/80 text-amber-300 px-2 py-0.2 rounded-full font-mono flex items-center gap-1 border border-amber-700">
+                      <span className="text-[10px] bg-amber-900/80 text-amber-300 px-2 py-0.2 rounded-full font-mono flex items-center gap-1 border border-amber-700 shrink-0">
                         <AlertTriangle className="w-3 h-3" />
                         <span>Unverified / Needs Review</span>
                       </span>
                     )}
                   </div>
-                  <div className="text-slate-400 text-[11px] flex gap-2 mt-0.5">
+                  <div className="text-slate-400 text-[11px] flex flex-wrap gap-1.5 mt-1 min-w-0">
                     {(activeLightbox.tags || []).map((t) => (
-                      <span key={t}>#{t}</span>
+                      <span key={t} className="bg-slate-800 px-1.5 py-0.2 rounded text-[10px]">#{t}</span>
                     ))}
                   </div>
                 </div>

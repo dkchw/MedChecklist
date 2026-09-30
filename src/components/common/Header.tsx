@@ -21,7 +21,9 @@ import {
   Edit2,
   Check,
   GraduationCap,
+  Settings,
 } from 'lucide-react';
+import appLogo from '../../../assets/app-icon.png';
 import { ThemeMode } from '../../utils/theme';
 import { WorkspaceTab, TabType } from '../../types/tab';
 import { APP_VERSION } from '../../version';
@@ -44,6 +46,7 @@ interface HeaderProps {
   themeMode: ThemeMode;
   onToggleTheme: () => void;
   onCheckUpdate?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -60,6 +63,7 @@ export const Header: React.FC<HeaderProps> = ({
   themeMode,
   onToggleTheme,
   onCheckUpdate,
+  onOpenSettings,
 }) => {
 
   const getTabIcon = (type: TabType) => {
@@ -87,7 +91,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-3 sm:gap-4 flex-wrap flex-1 min-w-0">
         <div className="flex items-center gap-2 shrink-0">
           <img
-            src="/icon.png"
+            src={appLogo}
             alt="MedChecklist Logo"
             className="w-8 h-8 rounded-xl object-contain shadow-xs border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900"
           />
@@ -99,9 +103,9 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
               <button
                 type="button"
-                onClick={onCheckUpdate}
-                title="Click to check for updates"
-                className="text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-200 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                onClick={onOpenSettings || onCheckUpdate}
+                title="Click to check for updates & open settings"
+                className="text-[10px] font-mono font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white px-2 py-0.5 rounded cursor-pointer transition-colors border border-slate-200/60 dark:border-slate-700"
               >
                 v{APP_VERSION}
               </button>
@@ -196,25 +200,34 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Sync Modal Button */}
         <button
           onClick={onOpenSync}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition-colors border border-slate-200/50 dark:border-slate-700"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition-colors border border-slate-200/50 dark:border-slate-700 cursor-pointer"
           title="GitHub PAT & Local P2P Wi-Fi Sync"
         >
           <GitBranch className="w-3.5 h-3.5 text-indigo-500" />
           <span className="hidden md:inline">Sync</span>
         </button>
 
+        {/* Application Settings & Updates Button */}
+        <button
+          onClick={onOpenSettings}
+          className="p-2 text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors border border-slate-200/60 dark:border-slate-700 cursor-pointer"
+          title="Application Settings & Check for Updates"
+        >
+          <Settings className="w-4 h-4 text-slate-700 dark:text-slate-200" />
+        </button>
+
         {/* Export / Import Full Backup */}
         <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5">
           <button
             onClick={onExportBackup}
-            className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors"
+            className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors cursor-pointer"
             title="Download JSON Clinical Backup"
           >
             <Download className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={onImportBackup}
-            className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors"
+            className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors cursor-pointer"
             title="Restore from JSON Clinical Backup"
           >
             <Upload className="w-3.5 h-3.5" />

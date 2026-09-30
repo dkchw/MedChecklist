@@ -8,22 +8,31 @@ interface NewPatientModalProps {
   checklists: Checklist[];
   templates: ClinicalTemplate[];
   initialGroup?: string;
+  initialFacility?: string;
+  facilities?: string[];
+  wards?: string[];
   onCreate: (encounter: PatientEncounter) => void;
   onClose: () => void;
 }
 
-const COMMON_FACILITIES = ['General Hospital', 'City Medical Center', 'Memorial Clinic', 'University Hospital', 'St. Jude Medical'];
-const COMMON_WARDS = ['Emergency', 'ICU', 'Internal Med', 'Cardiology', 'Surgery', 'Pediatrics'];
+const DEFAULT_FACILITIES = ['General Hospital', 'City Medical Center', 'Memorial Clinic', 'University Hospital', 'St. Jude Medical'];
+const DEFAULT_WARDS = ['Emergency', 'ICU', 'Internal Med', 'Cardiology', 'Surgery', 'Pediatrics'];
 
 export const NewPatientModal: React.FC<NewPatientModalProps> = ({
   checklists,
   templates,
   initialGroup,
+  initialFacility,
+  facilities = [],
+  wards = [],
   onCreate,
   onClose,
 }) => {
+  const mergedFacilities = Array.from(new Set([...facilities, ...DEFAULT_FACILITIES]));
+  const mergedWards = Array.from(new Set([...wards, ...DEFAULT_WARDS]));
+
   const [identifier, setIdentifier] = useState('');
-  const [facility, setFacility] = useState('General Hospital');
+  const [facility, setFacility] = useState(initialFacility || mergedFacilities[0] || 'General Hospital');
   const [group, setGroup] = useState(initialGroup || 'Emergency');
   const [bedNumber, setBedNumber] = useState('');
   const [age, setAge] = useState('');
@@ -148,19 +157,35 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
 
           {/* Hospital / Clinic / Facility Selection */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Hospital / Clinic / Medical Center</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Hospital / Clinic / Medical Center</span>
+              </label>
+              {mergedFacilities.length > 0 && (
+                <select
+                  value={facility}
+                  onChange={(e) => setFacility(e.target.value)}
+                  className="text-[11px] px-2 py-0.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none"
+                >
+                  {mergedFacilities.map((fac) => (
+                    <option key={fac} value={fac}>
+                      {fac}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
             <div className="flex flex-wrap gap-1.5 mb-2">
-              {COMMON_FACILITIES.map((fac) => (
+              {mergedFacilities.slice(0, 6).map((fac) => (
                 <button
                   key={fac}
                   type="button"
                   onClick={() => setFacility(fac)}
-                  className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                  className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors cursor-pointer ${
                     facility === fac
-                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
                   }`}
                 >
@@ -172,26 +197,42 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
               type="text"
               value={facility}
               onChange={(e) => setFacility(e.target.value)}
-              placeholder="e.g. City General Hospital, Downtown Urgent Care..."
-              className="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+              placeholder="Or type custom facility name..."
+              className="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-sans"
             />
           </div>
 
           {/* Ward / Group Assignment */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-              <Folder className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Ward / Patient Group</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Folder className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Ward / Unit / Bed Block</span>
+              </label>
+              {mergedWards.length > 0 && (
+                <select
+                  value={group}
+                  onChange={(e) => setGroup(e.target.value)}
+                  className="text-[11px] px-2 py-0.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none"
+                >
+                  {mergedWards.map((w) => (
+                    <option key={w} value={w}>
+                      {w}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
             <div className="flex flex-wrap gap-1.5 mb-2">
-              {COMMON_WARDS.map((w) => (
+              {mergedWards.slice(0, 6).map((w) => (
                 <button
                   key={w}
                   type="button"
                   onClick={() => setGroup(w)}
-                  className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                  className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors cursor-pointer ${
                     group === w
-                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
                   }`}
                 >

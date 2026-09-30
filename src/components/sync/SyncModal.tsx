@@ -521,7 +521,7 @@ export const SyncModal: React.FC<SyncModalProps> = ({ onClose }) => {
                         <img
                           src={myQrUrl}
                           alt="Pairing QR"
-                          className="w-48 h-48 rounded-xl border border-slate-200 dark:border-slate-700 bg-white p-2 shadow-2xs mb-2"
+                          className="w-48 h-48 rounded-xl border border-slate-200 dark:border-slate-700 bg-white preserve-white p-2 shadow-2xs mb-2"
                         />
                       ) : (
                         <div className="w-48 h-48 flex items-center justify-center text-slate-400 text-xs">

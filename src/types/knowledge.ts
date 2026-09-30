@@ -6,6 +6,7 @@ export interface KnowledgeNote {
   facility?: string; // e.g. St. Jude Hospital
   ward?: string; // e.g. ICU, Cardiology
   tags?: string[];
+  isPinned?: boolean;
   linkedChecklistIds?: string[];
   linkedTemplateIds?: string[];
   createdAt: number;
@@ -25,6 +26,7 @@ export interface ChecklistRunSession {
   folderId?: string;
   facility?: string;
   ward?: string;
+  isPinned?: boolean;
   createdAt: number;
   updatedAt: number;
   isDeleted?: boolean;

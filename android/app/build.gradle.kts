@@ -11,10 +11,22 @@ android {
         applicationId = "com.medchecklist.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 10
-        versionName = "1.0.7"
+        versionCode = 11
+        versionName = "1.0.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("medchecklist-release.jks")
+            storePassword = "medchecklist_release_pass"
+            keyAlias = "medchecklist"
+            keyPassword = "medchecklist_release_pass"
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+        }
     }
 
     buildTypes {
@@ -24,7 +36,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
