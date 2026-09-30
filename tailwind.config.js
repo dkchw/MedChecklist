@@ -8,22 +8,27 @@ export default {
   theme: {
     extend: {
       colors: {
-        clinical: {
-          50: '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          300: '#cbd5e1',
-          400: '#94a3b8',
-          500: '#64748b',
-          600: '#475569',
-          700: '#334155',
-          800: '#1e293b',
-          900: '#0f172a',
-          blue: '#0284c7',
-          red: '#ef4444',
-          emerald: '#10b981',
-          amber: '#f59e0b',
+        // Semantic colors using CSS custom properties — auto-switch light/dark
+        semantic: {
+          bg: 'rgb(var(--color-bg-primary) / <alpha-value>)',
+          card: 'rgb(var(--color-bg-card) / <alpha-value>)',
+          surface: 'rgb(var(--color-bg-surface) / <alpha-value>)',
+          elevated: 'rgb(var(--color-bg-elevated) / <alpha-value>)',
+          border: 'rgb(var(--color-border) / <alpha-value>)',
+          'border-light': 'rgb(var(--color-border-light) / <alpha-value>)',
+          text: 'rgb(var(--color-text-primary) / <alpha-value>)',
+          'text-secondary': 'rgb(var(--color-text-secondary) / <alpha-value>)',
+          'text-muted': 'rgb(var(--color-text-muted) / <alpha-value>)',
+          'text-dim': 'rgb(var(--color-text-dim) / <alpha-value>)',
+          accent: 'rgb(var(--color-accent) / <alpha-value>)',
+          'accent-hover': 'rgb(var(--color-accent-hover) / <alpha-value>)',
         },
+        // Intermediate slate shades missing from default Tailwind palette
+        slate: {
+          750: '#2e3450',
+          850: '#1a2035',
+        },
+        // Tokyo Night reference palette (for direct use where needed)
         tokyo: {
           bg: '#1a1b26',
           darker: '#16161e',
@@ -43,12 +48,21 @@ export default {
           orange: '#ff9e64',
           purple: '#bb9af7',
           red: '#f7768e',
-        }
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
-      }
+      },
+      boxShadow: {
+        '2xs': '0 1px 2px 0 rgb(0 0 0 / 0.03)',
+      },
+      backdropBlur: {
+        xs: '2px',
+      },
+      padding: {
+        '0.2': '0.05rem',
+      },
     },
   },
   plugins: [],

@@ -26,6 +26,7 @@ import { checkForGitHubUpdate, UpdateCheckResult } from './utils/githubUpdater';
 import { UpdateBanner } from './components/common/UpdateBanner';
 import { getInitialTheme, applyTheme, ThemeMode } from './utils/theme';
 import { APP_VERSION } from './version';
+import { DEFAULT_FACILITIES, DEFAULT_WARDS } from './constants/defaults';
 
 export function App() {
   // Customizable Tabs State
@@ -67,7 +68,7 @@ export function App() {
     const chks = await db.checklists.toArray();
     const tmpls = await db.clinicalTemplates.toArray();
     const encs = await db.encounters.toArray();
-    const flds = (await db.folders.orderBy('order').toArray()) as any;
+    const flds = (await db.folders.orderBy('order').toArray()) as unknown as FolderItem[];
 
     setChecklists(chks);
     setClinicalTemplates(tmpls);
@@ -79,7 +80,7 @@ export function App() {
     try {
       const savedTabs = await db.settings.get('workspace_tabs');
       if (savedTabs && savedTabs.value && savedTabs.value.length > 0) {
-        const hasKnowledge = savedTabs.value.some((t: any) => t.type === 'knowledge');
+        const hasKnowledge = savedTabs.value.some((t: WorkspaceTab) => t.type === 'knowledge');
         if (!hasKnowledge) {
           const merged = [
             ...savedTabs.value,
@@ -103,7 +104,11 @@ export function App() {
   }, [themeMode]);
 
   const handleToggleTheme = () => {
-    setThemeMode((prev) => (prev === 'light' ? 'dark' : 'light'));
+    setThemeMode((prev) => {
+      if (prev === 'light') return 'dark';
+      if (prev === 'dark') return 'system';
+      return 'light';
+    });
   };
 
   useEffect(() => {
@@ -119,12 +124,11 @@ export function App() {
     const res = await checkForGitHubUpdate('dkchw', 'MedChecklist');
     if (res && res.hasUpdate) {
       setUpdateInfo(res);
-    } else {
-      alert(`MedChecklist is up to date (v${APP_VERSION}).`);
     }
+    // If no update, SettingsModal will show "up to date" status
   };
 
-  // Keyboard shortcut for search (⌘K or Ctrl+K)
+  // Keyboard shortcut for search (⌘K or Ctrl+K) and Escape to dismiss modals
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -132,17 +136,27 @@ export function App() {
         setShowSearchModal((prev) => !prev);
       }
       if (e.key === 'Escape') {
-        setShowSearchModal(false);
+        // Dismiss modals in priority order (topmost first)
+        if (llmTarget) { setLlmTarget(null); return; }
+        if (editingChecklist) { setEditingChecklist(null); return; }
+        if (editingClinicalTemplate) { setEditingClinicalTemplate(null); return; }
+        if (showGalleryModal) { setShowGalleryModal(false); return; }
+        if (showFolderModal) { setShowFolderModal(false); return; }
+        if (showVaultModal) { setShowVaultModal(false); return; }
+        if (showNewPatientModal) { setShowNewPatientModal(false); return; }
+        if (showSettingsModal) { setShowSettingsModal(false); return; }
+        if (showSyncModal) { setShowSyncModal(false); return; }
+        if (showSearchModal) { setShowSearchModal(false); return; }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [showSearchModal, showSyncModal, showSettingsModal, showNewPatientModal, showVaultModal, showFolderModal, showGalleryModal, editingChecklist, editingClinicalTemplate, llmTarget]);
 
   // Workspace Tabs Management
   const handleAddTab = async (title: string, type: TabType) => {
     const newTab: WorkspaceTab = {
-      id: 'tab-' + Date.now(),
+      id: 'tab-' + crypto.randomUUID(),
       title,
       type,
       isClosable: true,
@@ -186,7 +200,7 @@ export function App() {
     wardName?: string
   ) => {
     const newFolder: FolderItem = {
-      id: 'fld-' + Date.now(),
+      id: 'fld-' + crypto.randomUUID(),
       name,
       type,
       color: color || '#6366f1',
@@ -195,14 +209,14 @@ export function App() {
       wardName,
       order: folders.length,
     };
-    await db.folders.put(newFolder as any);
+    await db.folders.put(newFolder);
     await refreshData();
   };
 
   const handleRenameFolder = async (id: string, newName: string) => {
     const f = folders.find((fld) => fld.id === id);
     if (f) {
-      await db.folders.put({ ...f, name: newName } as any);
+      await db.folders.put({ ...f, name: newName });
       await refreshData();
     }
   };
@@ -267,8 +281,8 @@ export function App() {
 
   const handleDuplicateChecklist = async (chk: Checklist) => {
     const cloned: Checklist = {
-      ...JSON.parse(JSON.stringify(chk)),
-      id: 'chk-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      ...structuredClone(chk),
+      id: 'chk-' + crypto.randomUUID(),
       title: `${chk.title} (Copy)`,
       updatedAt: Date.now(),
     };
@@ -289,11 +303,11 @@ export function App() {
     }
 
     const newInstance: EncounterChecklistInstance = {
-      id: 'inst-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      id: 'inst-' + crypto.randomUUID(),
       templateId: chk.id,
       title: chk.title,
       institution: chk.institution,
-      sections: JSON.parse(JSON.stringify(chk.sections)),
+      sections: structuredClone(chk.sections),
     };
 
     const updated: PatientEncounter = {
@@ -348,20 +362,20 @@ export function App() {
   };
 
   const handleImportBackup = () => {
+    if (!window.confirm('Import backup? This will merge data with your current records.')) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
-    input.onchange = async (e: any) => {
-      const file = e.target.files?.[0];
+    input.onchange = async (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       const text = await file.text();
       try {
         const payload = JSON.parse(text);
         await P2PSyncService.importSyncPayload(payload);
         await refreshData();
-        alert('Backup successfully restored and merged!');
-      } catch (err: any) {
-        alert('Error restoring backup: ' + err.message);
+      } catch (err) {
+        console.error('Error restoring backup:', err);
       }
     };
     input.click();
@@ -385,6 +399,9 @@ export function App() {
         }}
       />
     );
+  } else if (isBedsideMode && !currentEncounter) {
+    // Safety: exit bedside mode if encounter was deleted or deselected
+    setIsBedsideMode(false);
   }
 
   // Active Tab Type
@@ -393,13 +410,13 @@ export function App() {
   const allFacilityNames = React.useMemo(() => {
     const fromFolders = folders.filter((f) => f.type === 'facility').map((f) => f.name);
     const fromEncounters = encounters.map((e) => e.facility).filter(Boolean) as string[];
-    return Array.from(new Set([...fromFolders, ...fromEncounters, 'General Hospital', 'St. Jude Medical Center']));
+    return Array.from(new Set([...fromFolders, ...fromEncounters, ...DEFAULT_FACILITIES]));
   }, [folders, encounters]);
 
   const allWardNames = React.useMemo(() => {
     const fromFolders = folders.filter((f) => f.type === 'ward').map((f) => f.name);
     const fromEncounters = encounters.map((e) => e.group).filter(Boolean) as string[];
-    return Array.from(new Set([...fromFolders, ...fromEncounters, 'Emergency', 'ICU', 'Internal Med', 'Cardiology']));
+    return Array.from(new Set([...fromFolders, ...fromEncounters, ...DEFAULT_WARDS]));
   }, [folders, encounters]);
 
   return (
@@ -412,10 +429,6 @@ export function App() {
         tabs={tabs}
         activeTabId={activeTabId}
         onSelectTab={setActiveTabId}
-        onAddTab={handleAddTab}
-        onRemoveTab={handleRemoveTab}
-        onRenameTab={handleRenameTab}
-        onReorderTabs={handleReorderTabs}
         onOpenFolders={() => setShowFolderModal(true)}
         onOpenSearch={() => setShowSearchModal(true)}
         onOpenSync={() => setShowSyncModal(true)}
@@ -429,7 +442,7 @@ export function App() {
         onOpenSettings={() => setShowSettingsModal(true)}
       />
 
-      <main className="flex-1">
+      <main className="flex-1 min-h-0">
         {activeTab.type === 'encounters' && (
           <PatientEncounterView
             encounters={encounters}
@@ -463,16 +476,16 @@ export function App() {
             onOpenEditor={(chk) => setEditingChecklist(chk)}
             onCreateChecklist={() => {
               const newChk: Checklist = {
-                id: 'chk-' + Date.now(),
+                id: 'chk-' + crypto.randomUUID(),
                 title: 'New Modular Checklist',
                 description: 'Clinical protocol steps and bounds',
                 category: 'General',
                 tags: ['custom'],
                 sections: [
                   {
-                    id: 'sec-' + Date.now(),
+                    id: 'sec-' + crypto.randomUUID(),
                     title: 'Section 1',
-                    items: [{ id: 'item-' + Date.now(), text: 'New item', checked: false }],
+                    items: [{ id: 'item-' + crypto.randomUUID(), text: 'New item', checked: false }],
                   },
                 ],
                 updatedAt: Date.now(),
@@ -494,7 +507,7 @@ export function App() {
             onOpenEditor={(tmpl) => setEditingClinicalTemplate(tmpl)}
             onCreateTemplate={() => {
               const newTmpl: ClinicalTemplate = {
-                id: 'tmpl-' + Date.now(),
+                id: 'tmpl-' + crypto.randomUUID(),
                 title: 'New Clinical Template Bundle',
                 description: 'Bundle grouping multiple checklists and protocol guidance',
                 category: 'General',
@@ -626,15 +639,6 @@ export function App() {
         />
       )}
 
-      {showGalleryModal && (
-        <ImageGalleryModal
-          encounters={encounters}
-          selectedEncounterId={selectedEncounterId}
-          onUpdateEncounter={handleUpdateEncounter}
-          onClose={() => setShowGalleryModal(false)}
-        />
-      )}
-
       {editingChecklist && (
         <ChecklistEditorModal
           checklist={editingChecklist}
@@ -664,7 +668,7 @@ export function App() {
                 checklists: [
                   ...llmTarget.encounter.checklists,
                   {
-                    id: 'inst-llm-' + Date.now(),
+                    id: 'inst-llm-' + crypto.randomUUID(),
                     templateId: 'chk-imported',
                     title: 'Imported Findings from Chatbox',
                     sections,

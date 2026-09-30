@@ -14,7 +14,6 @@ import {
   ExternalLink,
   Smartphone,
   Laptop,
-  Globe,
 } from 'lucide-react';
 import { APP_VERSION } from '../../version';
 import { checkForGitHubUpdate, UpdateCheckResult } from '../../utils/githubUpdater';
@@ -91,11 +90,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  const apkAsset = updateResult?.assets?.find((a) => a.name.endsWith('.apk'));
+
+  const handleImportBackupWithConfirm = () => {
+    if (window.confirm('Importing a backup will merge or overwrite existing data. Are you sure you want to proceed?')) {
+      onImportBackup();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden transition-colors">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden transition-colors"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-850">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 bg-semantic-surface">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs">
               <Settings className="w-5 h-5" />
@@ -202,32 +225,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 )}
 
-                {(() => {
-                  const apkAsset = updateResult.assets?.find((a) => a.name.endsWith('.apk'));
-                  return (
-                    <div className="pt-1 flex items-center gap-2">
-                      {isAndroid && apkAsset ? (
-                        <button
-                          type="button"
-                          onClick={() => handleStartUpdate(apkAsset.downloadUrl, updateResult.latestVersion)}
-                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Download & Install APK</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => window.open(updateResult.releaseUrl, '_blank')}
-                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          <span>View GitHub Release</span>
-                        </button>
-                      )}
-                    </div>
-                  );
-                })()}
+                <div className="pt-1 flex items-center gap-2">
+                  {isAndroid && apkAsset ? (
+                    <button
+                      type="button"
+                      onClick={() => handleStartUpdate(apkAsset.downloadUrl, updateResult.latestVersion)}
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download & Install APK</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => window.open(updateResult.releaseUrl, '_blank')}
+                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>View GitHub Release</span>
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -237,7 +255,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  {themeMode === 'dark' ? <Moon className="w-4 h-4 text-purple-400" /> : <Sun className="w-4 h-4 text-amber-500" />}
+                  {themeMode === 'dark' ? <Moon className="w-4 h-4 text-purple-400" /> : themeMode === 'light' ? <Sun className="w-4 h-4 text-amber-500" /> : isAndroid ? <Smartphone className="w-4 h-4 text-slate-400" /> : <Laptop className="w-4 h-4 text-slate-400" />}
                   <span>Appearance & Color Theme</span>
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -254,6 +272,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <>
                     <Moon className="w-3.5 h-3.5 text-slate-700" />
                     <span>Switch to Tokyo Night</span>
+                  </>
+                ) : themeMode === 'dark' ? (
+                  <>
+                    {isAndroid ? <Smartphone className="w-3.5 h-3.5 text-slate-400" /> : <Laptop className="w-3.5 h-3.5 text-slate-400" />}
+                    <span>Switch to System</span>
                   </>
                 ) : (
                   <>
@@ -319,7 +342,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={onImportBackup}
+                onClick={handleImportBackupWithConfirm}
                 className="px-3 py-1.5 bg-slate-200/80 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 rounded-xl font-semibold cursor-pointer transition-colors"
               >
                 Import JSON Backup

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Folder,
   FolderPlus,
@@ -10,18 +10,18 @@ import {
   Search,
   Plus,
   Trash2,
-  Edit2,
+  
   LayoutList,
   LayoutGrid,
   CheckCircle2,
-  Archive,
+  
   User,
   CheckSquare,
   Layers,
   GraduationCap,
-  Sparkles,
+  
   ArrowRight,
-  MoreVertical,
+  
 } from 'lucide-react';
 import { FolderItem } from '../../types/tab';
 
@@ -38,7 +38,7 @@ export interface FileItem {
   isPinned?: boolean;
   updatedAt: number;
   metadata?: string;
-  rawItem: any;
+  rawItem?: unknown;
 }
 
 interface ClinicalFileManagerProps {
@@ -100,6 +100,14 @@ export const ClinicalFileManager: React.FC<ClinicalFileManagerProps> = ({
   // Local folder selection
   const [currentFacility, setCurrentFacility] = useState<string | undefined>(propFacility);
   const [currentWard, setCurrentWard] = useState<string | undefined>(propWard);
+
+  useEffect(() => {
+    setCurrentFacility(propFacility);
+  }, [propFacility]);
+
+  useEffect(() => {
+    setCurrentWard(propWard);
+  }, [propWard]);
 
   // Extract all unique facilities from both folders and items
   const allFacilities = useMemo(() => {
@@ -254,7 +262,7 @@ export const ClinicalFileManager: React.FC<ClinicalFileManagerProps> = ({
           </div>
 
           {pinnedItems.length === 0 ? (
-            <div className="py-4 text-center text-xs text-slate-400 dark:text-slate-500 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-850/50">
+            <div className="py-4 text-center text-xs text-slate-400 dark:text-slate-500 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-semantic-surface/50">
               <p>No pinned items yet.</p>
               <p className="text-[10px] mt-0.5">Click ⭐ on any item in the file explorer to pin it here.</p>
             </div>
@@ -330,9 +338,9 @@ export const ClinicalFileManager: React.FC<ClinicalFileManagerProps> = ({
       </div>
 
       {/* 2. MAIN TECHNICAL FILE EXPLORER WORKSPACE */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden flex flex-col md:flex-row min-h-[580px]">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden flex flex-col md:flex-row min-h-[300px] md:min-h-[400px]">
         {/* Left Sidebar: Folder & Hierarchy Tree */}
-        <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 p-4 flex flex-col justify-between shrink-0">
+        <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 bg-semantic-surface p-4 flex flex-col justify-between shrink-0">
           <div className="space-y-4">
             {/* Tree Header */}
             <div className="flex items-center justify-between">
@@ -454,7 +462,7 @@ export const ClinicalFileManager: React.FC<ClinicalFileManagerProps> = ({
                               e.stopPropagation();
                               setIsAddingWardForFacilityId(fac.id);
                             }}
-                            className="p-0.5 opacity-0 group-hover:opacity-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-opacity"
+                            className="p-0.5 opacity-60 md:opacity-0 md:group-hover:opacity-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-opacity"
                             title="Add Ward inside this Facility"
                           >
                             <Plus className="w-3 h-3" />
@@ -541,7 +549,7 @@ export const ClinicalFileManager: React.FC<ClinicalFileManagerProps> = ({
         {/* Right Main Explorer: Breadcrumbs, Toolbar & Items Table/Grid */}
         <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-900">
           {/* Breadcrumbs & Primary Actions Bar */}
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/40 dark:bg-slate-850/40">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-semantic-surface/50">
             {/* Breadcrumb Path */}
             <div className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 font-mono truncate">
               <button
@@ -586,7 +594,7 @@ export const ClinicalFileManager: React.FC<ClinicalFileManagerProps> = ({
                       className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                         statusFilter === opt.id
                           ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs font-semibold'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-950'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white'
                       }`}
                     >
                       {opt.label} {opt.count !== undefined ? `(${opt.count})` : ''}
@@ -692,7 +700,7 @@ export const ClinicalFileManager: React.FC<ClinicalFileManagerProps> = ({
               /* Technical Table View */
               <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-2xs">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 text-[11px] font-mono text-slate-500 dark:text-slate-400 uppercase">
+                  <thead className="bg-semantic-surface border-b border-slate-200 dark:border-slate-800 text-[11px] font-mono text-slate-500 dark:text-slate-400 uppercase">
                     <tr>
                       <th className="py-2.5 px-3 w-8"></th>
                       <th className="py-2.5 px-3">Title / Identifier</th>
@@ -802,8 +810,8 @@ export const ClinicalFileManager: React.FC<ClinicalFileManagerProps> = ({
                             {onDeleteItem && (
                               <button
                                 type="button"
-                                onClick={() => onDeleteItem(item)}
-                                className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors"
+                                onClick={() => { if (window.confirm('Are you sure you want to delete this item?')) onDeleteItem(item); }}
+                                className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded transition-colors"
                                 title="Delete"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />

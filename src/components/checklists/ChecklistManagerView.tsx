@@ -66,13 +66,13 @@ export const ChecklistManagerView: React.FC<ChecklistManagerViewProps> = ({
   const filteredChecklists = checklists.filter((c) => {
     if (c.isDeleted) return false;
     if (selectedCategory !== 'all' && c.category !== selectedCategory) return false;
-    if (selectedTag && !c.tags.includes(selectedTag)) return false;
+    if (selectedTag && !c.tags?.includes(selectedTag)) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchTitle = c.title.toLowerCase().includes(q);
       const matchDesc = (c.description || '').toLowerCase().includes(q);
       const matchInst = (c.institution || '').toLowerCase().includes(q);
-      const matchTag = c.tags.some((t) => t.toLowerCase().includes(q));
+      const matchTag = c.tags?.some((t) => t.toLowerCase().includes(q));
       if (!matchTitle && !matchDesc && !matchInst && !matchTag) return false;
     }
     return true;
@@ -235,7 +235,11 @@ export const ChecklistManagerView: React.FC<ChecklistManagerViewProps> = ({
             <Sparkles className="w-4 h-4" />
           </button>
           <button
-            onClick={() => onDeleteChecklist(c.id)}
+            onClick={() => {
+              if (window.confirm('Are you sure you want to delete this checklist?')) {
+                onDeleteChecklist(c.id);
+              }
+            }}
             className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors"
             title="Delete Checklist"
           >
@@ -300,7 +304,7 @@ export const ChecklistManagerView: React.FC<ChecklistManagerViewProps> = ({
           {selectedTag && (
             <div className="flex items-center gap-1 text-xs bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800">
               <span>Filter: #{selectedTag}</span>
-              <button onClick={() => setSelectedTag(null)} className="ml-1 hover:text-indigo-900">
+              <button onClick={() => setSelectedTag(null)} className="ml-1 hover:text-indigo-900 dark:hover:text-indigo-200">
                 ×
               </button>
             </div>
@@ -314,7 +318,7 @@ export const ChecklistManagerView: React.FC<ChecklistManagerViewProps> = ({
             className={`px-3 py-1.5 rounded-xl font-semibold transition-colors shrink-0 ${
               selectedCategory === 'all'
                 ? 'bg-slate-900 dark:bg-indigo-600 text-white'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
             }`}
           >
             All Checklists ({checklists.filter((c) => !c.isDeleted).length})
@@ -326,7 +330,7 @@ export const ChecklistManagerView: React.FC<ChecklistManagerViewProps> = ({
               className={`px-3 py-1.5 rounded-xl font-medium transition-colors shrink-0 ${
                 selectedCategory === cat
                   ? 'bg-slate-900 dark:bg-indigo-600 text-white'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
             >
               {cat}
@@ -347,7 +351,7 @@ export const ChecklistManagerView: React.FC<ChecklistManagerViewProps> = ({
           </p>
           <button
             onClick={onCreateChecklist}
-            className="px-4 py-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 transition-colors"
+            className="px-4 py-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 dark:hover:bg-indigo-700 transition-colors"
           >
             Create Checklist
           </button>

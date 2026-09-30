@@ -5,17 +5,13 @@ import {
   Image as ImageIcon,
   Tag,
   Plus,
-  Trash2,
   X,
   Maximize2,
   Search,
-  Filter,
   Download,
   ShieldCheck,
   AlertTriangle,
   EyeOff,
-  PenTool,
-  Check,
 } from 'lucide-react';
 import { ImageEditorModal } from '../common/ImageEditorModal';
 
@@ -48,41 +44,44 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
   const [newTagText, setNewTagText] = useState('');
 
   // Collect all images from encounters
-  const allImages: Array<MedicalImage & { encounterId: string; patientIdentifier: string; bedNumber?: string }> = [];
+  const allImages = React.useMemo(() => {
+    const images: Array<MedicalImage & { encounterId: string; patientIdentifier: string; bedNumber?: string }> = [];
+    for (const enc of encounters) {
+      if (enc.isDeleted) continue;
 
-  for (const enc of encounters) {
-    if (enc.isDeleted) continue;
-    if (filterPatientId !== 'all' && enc.id !== filterPatientId) continue;
+      // Encounter level images
+      for (const img of enc.images || []) {
+        images.push({
+          ...img,
+          encounterId: enc.id,
+          patientIdentifier: enc.patientIdentifier,
+          bedNumber: enc.bedNumber,
+        });
+      }
 
-    // Encounter level images
-    for (const img of enc.images || []) {
-      allImages.push({
-        ...img,
-        encounterId: enc.id,
-        patientIdentifier: enc.patientIdentifier,
-        bedNumber: enc.bedNumber,
-      });
-    }
-
-    // Checklist level images
-    for (const chk of enc.checklists || []) {
-      for (const sec of chk.sections || []) {
-        for (const itm of sec.items || []) {
-          for (const img of itm.images || []) {
-            allImages.push({
-              ...img,
-              encounterId: enc.id,
-              patientIdentifier: enc.patientIdentifier,
-              bedNumber: enc.bedNumber,
-            });
+      // Checklist level images
+      for (const chk of enc.checklists || []) {
+        for (const sec of chk.sections || []) {
+          for (const itm of sec.items || []) {
+            for (const img of itm.images || []) {
+              images.push({
+                ...img,
+                encounterId: enc.id,
+                patientIdentifier: enc.patientIdentifier,
+                bedNumber: enc.bedNumber,
+              });
+            }
           }
         }
       }
     }
-  }
+    return images;
+  }, [encounters]);
 
   // Filter images
   const filteredImages = allImages.filter((img) => {
+    if (filterPatientId !== 'all' && img.encounterId !== filterPatientId) return false;
+
     const isAnonymized = (img.tags || []).some((t) => t === 'anonymized' || t === 'redacted');
     if (privacyFilter === 'anonymized' && !isAnonymized) return false;
     if (privacyFilter === 'needs_review' && isAnonymized) return false;
@@ -109,7 +108,7 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
     const targetEnc = encounters.find((e) => e.id === targetImg.encounterId);
     if (!targetEnc) return;
 
-    const updatedEnc = JSON.parse(JSON.stringify(targetEnc)) as PatientEncounter;
+    const updatedEnc = structuredClone(targetEnc) as PatientEncounter;
 
     // Check encounter images
     let found = false;
@@ -150,7 +149,7 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
     const targetEnc = encounters.find((e) => e.id === targetImg.encounterId);
     if (!targetEnc) return;
 
-    const updatedEnc = JSON.parse(JSON.stringify(targetEnc)) as PatientEncounter;
+    const updatedEnc = structuredClone(targetEnc) as PatientEncounter;
 
     if (updatedEnc.images) {
       for (const img of updatedEnc.images) {
@@ -183,7 +182,7 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
     } else {
       const targetEnc = encounters.find((e) => e.id === targetImg.encounterId);
       if (!targetEnc) return;
-      const updatedEnc = JSON.parse(JSON.stringify(targetEnc)) as PatientEncounter;
+      const updatedEnc = structuredClone(targetEnc) as PatientEncounter;
 
       let found = false;
       if (updatedEnc.images) {
@@ -223,7 +222,7 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
     const targetEnc = encounters.find((e) => e.id === targetImg.encounterId);
     if (!targetEnc) return;
 
-    const updatedEnc = JSON.parse(JSON.stringify(targetEnc)) as PatientEncounter;
+    const updatedEnc = structuredClone(targetEnc) as PatientEncounter;
 
     if (asNewCopy) {
       const newImg: MedicalImage = {
@@ -508,7 +507,7 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
                       </div>
 
                       {/* Action Bar on Card */}
-                      <div className="pt-1 border-t border-slate-100 dark:border-slate-750 flex items-center justify-between text-xs">
+                      <div className="pt-1 border-t border-semantic-border flex items-center justify-between text-xs">
                         <button
                           onClick={() => setEditingImage(img)}
                           className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
@@ -567,7 +566,7 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
                                 }}
                                 placeholder="tag..."
                                 autoFocus
-                                className="text-[10px] px-1 py-0.5 border border-indigo-400 rounded w-16 bg-white dark:bg-slate-900 outline-none"
+                                className="text-[10px] px-1 py-0.5 border border-indigo-400 rounded w-16 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none"
                               />
                               <button
                                 onClick={() => handleAddTag(img)}
@@ -602,7 +601,7 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
         {activeLightbox && (
           <div
             onClick={() => setActiveLightbox(null)}
-            className="fixed inset-0 z-60 bg-black/90 flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-150"
+            className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-150"
           >
             <div
               onClick={(e) => e.stopPropagation()}

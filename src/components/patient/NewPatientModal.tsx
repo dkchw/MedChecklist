@@ -51,16 +51,15 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
     const tmpl = templates.find((t) => t.id === templateId);
     if (tmpl) {
       // Pre-select bundled checklists
-      setSelectedChecklistIds(tmpl.checklistIds || []);
-      // Pre-populate protocol guidance notes if notes are empty or previous template notes
+      setSelectedChecklistIds(prev => [...new Set([...prev, ...(tmpl.checklistIds || [])])]);
+      // Pre-populate protocol guidance notes
       if (tmpl.protocolNotes) {
-        setGeneralNotes((prev) => {
-          if (!prev.trim() || prev.startsWith('### Protocol Guidance:')) {
-            return `### Protocol Guidance: ${tmpl.title}\n\n${tmpl.protocolNotes}`;
-          }
-          return `${prev}\n\n### Protocol Guidance: ${tmpl.title}\n\n${tmpl.protocolNotes}`;
-        });
+        setGeneralNotes(`### Protocol Guidance: ${tmpl.title}\n\n${tmpl.protocolNotes}`);
+      } else {
+        setGeneralNotes('');
       }
+    } else {
+      setGeneralNotes('');
     }
   };
 
@@ -85,7 +84,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
         templateId: c.id,
         title: c.title,
         institution: c.institution,
-        sections: JSON.parse(JSON.stringify(c.sections)),
+        sections: structuredClone(c.sections),
       }));
 
     const newEncounter: PatientEncounter = {
@@ -186,7 +185,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
                   className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors cursor-pointer ${
                     facility === fac
                       ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
                   {fac}
@@ -233,7 +232,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
                   className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors cursor-pointer ${
                     group === w
                       ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
                   {w}
@@ -281,7 +280,7 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
               </label>
               <select
                 value={sex}
-                onChange={(e) => setSex(e.target.value as any)}
+                onChange={(e) => setSex(e.target.value as 'M' | 'F' | 'Other')}
                 className="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
               >
                 <option value="M">Male (M)</option>

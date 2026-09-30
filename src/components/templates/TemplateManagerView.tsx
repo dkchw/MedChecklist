@@ -63,13 +63,13 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
   const filteredTemplates = templates.filter((t) => {
     if (t.isDeleted) return false;
     if (selectedCategory !== 'all' && t.category !== selectedCategory) return false;
-    if (selectedTag && !t.tags.includes(selectedTag)) return false;
+    if (selectedTag && !t.tags?.includes(selectedTag)) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchTitle = t.title.toLowerCase().includes(q);
       const matchDesc = (t.description || '').toLowerCase().includes(q);
       const matchInst = (t.institution || '').toLowerCase().includes(q);
-      const matchTag = t.tags.some((tag) => tag.toLowerCase().includes(q));
+      const matchTag = t.tags?.some((tag) => tag.toLowerCase().includes(q));
       if (!matchTitle && !matchDesc && !matchInst && !matchTag) return false;
     }
     return true;
@@ -259,7 +259,11 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
               )}
             </button>
             <button
-              onClick={() => onDeleteTemplate(t.id)}
+              onClick={() => {
+                if (window.confirm('Are you sure you want to delete this template?')) {
+                  onDeleteTemplate(t.id);
+                }
+              }}
               className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors"
               title="Delete Template"
             >
@@ -323,7 +327,7 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
           {selectedTag && (
             <div className="flex items-center gap-1 text-xs bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800">
               <span>Filter: #{selectedTag}</span>
-              <button onClick={() => setSelectedTag(null)} className="ml-1 hover:text-indigo-900">
+              <button onClick={() => setSelectedTag(null)} className="ml-1 hover:text-indigo-900 dark:hover:text-indigo-200">
                 ×
               </button>
             </div>
@@ -337,7 +341,7 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
             className={`px-3 py-1.5 rounded-xl font-semibold transition-colors shrink-0 ${
               selectedCategory === 'all'
                 ? 'bg-slate-900 dark:bg-indigo-600 text-white'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
             }`}
           >
             All Template Bundles ({templates.filter((t) => !t.isDeleted).length})
@@ -349,7 +353,7 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
               className={`px-3 py-1.5 rounded-xl font-medium transition-colors shrink-0 ${
                 selectedCategory === cat
                   ? 'bg-slate-900 dark:bg-indigo-600 text-white'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
             >
               {cat}
@@ -370,7 +374,7 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
           </p>
           <button
             onClick={onCreateTemplate}
-            className="px-4 py-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 transition-colors"
+            className="px-4 py-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 dark:hover:bg-indigo-700 transition-colors"
           >
             Create Template Bundle
           </button>
