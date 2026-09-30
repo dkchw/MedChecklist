@@ -33,3 +33,6 @@ medchecklist-v*
 *.njsproj
 *.sln
 *.sw?
+
+# Reference repos
+Zettlr/

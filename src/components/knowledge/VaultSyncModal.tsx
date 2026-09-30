@@ -29,6 +29,7 @@ import {
   parseYamlFrontmatter,
   VaultSyncResult,
 } from '../../utils/obsidianVaultSync';
+import { exportToBibtex } from '../../utils/bibtexParser';
 
 interface VaultSyncModalProps {
   checklists: Checklist[];
@@ -76,6 +77,8 @@ export const VaultSyncModal: React.FC<VaultSyncModalProps> = ({
     try {
       // 1. Fetch study runs from database
       const studyRuns = await db.checklistRuns.filter((r) => !r.isDeleted).toArray();
+      const savedBib = await db.settings.get('knowledge_bibliography');
+      const bibStr = savedBib?.value ? exportToBibtex(savedBib.value) : undefined;
 
       // 2. Generate Obsidian vault structure
       const vaultFiles = generateObsidianVaultFiles({
@@ -84,6 +87,7 @@ export const VaultSyncModal: React.FC<VaultSyncModalProps> = ({
         templates,
         studyRuns,
         folders,
+        bibliography: bibStr,
       });
 
       // 3. Write files to local desktop folder
@@ -143,12 +147,16 @@ export const VaultSyncModal: React.FC<VaultSyncModalProps> = ({
   const handleDownloadZip = async () => {
     try {
       const studyRuns = await db.checklistRuns.filter((r) => !r.isDeleted).toArray();
+      const savedBib = await db.settings.get('knowledge_bibliography');
+      const bibStr = savedBib?.value ? exportToBibtex(savedBib.value) : undefined;
+
       const vaultFiles = generateObsidianVaultFiles({
         notes,
         checklists,
         templates,
         studyRuns,
         folders,
+        bibliography: bibStr,
       });
       downloadVaultZip(vaultFiles, `MedChecklist-Vault-${new Date().toISOString().substring(0, 10)}.zip`);
     } catch (err: any) {

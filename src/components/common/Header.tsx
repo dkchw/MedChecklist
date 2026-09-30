@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Menu,
   ClipboardList,
   CheckSquare,
   Layers,
@@ -25,6 +26,7 @@ interface HeaderProps {
   tabs: WorkspaceTab[];
   activeTabId: string;
   onSelectTab: (tabId: string) => void;
+  onOpenSidebar: () => void;
   onOpenFolders: () => void;
   onOpenSearch: () => void;
   onOpenSync: () => void;
@@ -41,7 +43,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   tabs,
   activeTabId,
-  onSelectTab,
+  onOpenSidebar,
   onOpenFolders,
   onOpenSearch,
   onOpenSync,
@@ -54,172 +56,166 @@ export const Header: React.FC<HeaderProps> = ({
   onCheckUpdate,
   onOpenSettings,
 }) => {
+  const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
   const getTabIcon = (type: TabType) => {
     switch (type) {
       case 'encounters':
-        return <ClipboardList className="w-3.5 h-3.5 text-indigo-500" />;
+        return <ClipboardList className="w-3.5 h-3.5 text-indigo-500 shrink-0" />;
       case 'checklists':
-        return <CheckSquare className="w-3.5 h-3.5 text-emerald-500" />;
+        return <CheckSquare className="w-3.5 h-3.5 text-emerald-500 shrink-0" />;
       case 'templates':
-        return <Layers className="w-3.5 h-3.5 text-amber-500" />;
+        return <Layers className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
       case 'knowledge':
-        return <GraduationCap className="w-3.5 h-3.5 text-purple-500" />;
+        return <GraduationCap className="w-3.5 h-3.5 text-purple-500 shrink-0" />;
       case 'gallery':
-        return <ImageIcon className="w-3.5 h-3.5 text-rose-500" />;
+        return <ImageIcon className="w-3.5 h-3.5 text-rose-500 shrink-0" />;
       case 'folder':
-        return <Folder className="w-3.5 h-3.5 text-cyan-500" />;
+        return <Folder className="w-3.5 h-3.5 text-cyan-500 shrink-0" />;
       default:
-        return <ClipboardList className="w-3.5 h-3.5 text-indigo-500" />;
+        return <ClipboardList className="w-3.5 h-3.5 text-indigo-500 shrink-0" />;
     }
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-semantic-card/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-2 flex items-center justify-between transition-colors gap-3 flex-nowrap">
-      {/* Brand & Dynamic Tabs */}
-      <div className="flex items-center gap-3 sm:gap-4 flex-nowrap flex-1 min-w-0">
-        <div className="flex items-center gap-2 shrink-0">
+    <header className="sticky top-0 z-40 bg-semantic-card/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-3 sm:px-5 py-2 flex items-center justify-between transition-colors gap-3 flex-nowrap">
+      {/* Brand & Sidebar Trigger */}
+      <div className="flex items-center gap-3 flex-nowrap shrink-0">
+        <button
+          type="button"
+          onClick={onOpenSidebar}
+          className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-all cursor-pointer group border border-transparent hover:border-slate-200/80 dark:hover:border-slate-700"
+          title="Open Workspace Menu (or swipe right from left edge)"
+        >
+          <Menu className="w-5 h-5 text-indigo-500 group-hover:scale-110 transition-transform shrink-0" />
           <img
             src={appLogo}
             alt="MedChecklist Logo"
-            className="w-8 h-8 rounded-xl object-contain shadow-xs border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900"
+            className="w-7 h-7 rounded-lg object-contain shadow-xs border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0"
           />
-          <div>
-            <div className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+          <div className="text-left">
+            <div className="text-xs sm:text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
               <span>MedChecklist</span>
-              <span className="text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800">
+              <span className="text-[9px] font-semibold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 px-1 py-0.2 rounded border border-emerald-200 dark:border-emerald-800 hidden sm:inline">
                 MD-First
               </span>
-              <button
-                type="button"
-                onClick={onOpenSettings || onCheckUpdate}
-                title="Click to check for updates & open settings"
-                className="text-[10px] font-mono font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white px-2 py-0.5 rounded cursor-pointer transition-colors border border-slate-200/60 dark:border-slate-700"
-              >
-                v{APP_VERSION}
-              </button>
             </div>
           </div>
-        </div>
-
-        {/* Fixed Stationary Navigation Tabs Bar */}
-        <nav className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl overflow-x-auto scrollbar-hidden">
-          {tabs.map((tab) => {
-            const isActive = tab.id === activeTabId;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => onSelectTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all shrink-0 ${
-                  isActive
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50'
-                }`}
-              >
-                {getTabIcon(tab.type)}
-                <span>{tab.title}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Manage Folders Button */}
-        <button
-          onClick={onOpenFolders}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors border border-slate-200/60 dark:border-slate-700"
-          title="Manage Clinical Folders"
-        >
-          <Folder className="w-3.5 h-3.5 text-cyan-500" />
-          <span className="hidden md:inline">Folders</span>
         </button>
       </div>
 
-      {/* Right Controls */}
-      <div className="flex items-center gap-2 shrink-0">
-        {/* Encryption at Rest Status Badge & Vault Button */}
+      {/* Active Workspace / Mode Indicator */}
+      <div className="flex items-center gap-2 min-w-0">
         <button
-          onClick={onOpenVault}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-colors border ${
-            isVaultLocked
-              ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900/60'
-              : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/60'
-          }`}
-          title="Client-Side Encryption at Rest (AES-256-GCM)"
+          type="button"
+          onClick={onOpenSidebar}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200/60 dark:border-slate-700/60 text-xs font-semibold text-slate-800 dark:text-slate-200 truncate cursor-pointer transition-colors"
+          title="Click to switch workspace"
         >
-          {isVaultLocked ? (
-            <>
-              <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-              <span className="hidden lg:inline">Vault Locked</span>
-            </>
-          ) : (
-            <>
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span className="hidden lg:inline">Encrypted at Rest</span>
-            </>
-          )}
+          {getTabIcon(activeTab.type)}
+          <span className="truncate">{activeTab.title}</span>
+        </button>
+      </div>
+
+      {/* Right Utility Controls */}
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        {/* Manage Folders Shortcut */}
+        <button
+          onClick={onOpenFolders}
+          className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors border border-slate-200/60 dark:border-slate-700 cursor-pointer"
+          title="Manage Clinical Folders"
+        >
+          <Folder className="w-3.5 h-3.5 text-cyan-500" />
+          <span>Folders</span>
         </button>
 
-        {/* Search */}
+        {/* Encryption at Rest Status Badge & Vault Button */}
         <button
-          onClick={onOpenSearch}
-          className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-medium transition-colors"
-          title="Search checklists and notes (Ctrl+K)"
+          type="button"
+          onClick={onOpenVault}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-colors border ${
+            isVaultLocked
+              ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+              : 'bg-slate-100 dark:bg-slate-800 border-slate-200/60 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+          }`}
+          title={isVaultLocked ? 'Security Vault Locked - Click to unlock' : 'Data Protected with AES-256-GCM'}
         >
-          <Search className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-          <span className="hidden sm:inline">Search...</span>
-          <kbd className="hidden sm:inline text-[10px] bg-white dark:bg-slate-900 text-semantic-text-muted px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+          {isVaultLocked ? (
+            <Lock className="w-3.5 h-3.5 text-amber-500" />
+          ) : (
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+          )}
+          <span className="hidden xl:inline text-[11px] font-mono">
+            {isVaultLocked ? 'Locked' : 'Encrypted'}
+          </span>
+        </button>
+
+        {/* Global Search Bar Button */}
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-700 text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer text-xs"
+          title="Global Search (⌘K / Ctrl+K)"
+        >
+          <Search className="w-3.5 h-3.5 text-indigo-500" />
+          <span className="hidden lg:inline">Search</span>
+          <kbd className="hidden sm:inline-block text-[10px] bg-white dark:bg-slate-900 px-1 py-0.2 rounded border border-slate-200 dark:border-slate-700 font-mono text-semantic-text-muted">
             ⌘K
           </kbd>
         </button>
 
         {/* Dark Mode Toggle */}
         <button
+          type="button"
           onClick={onToggleTheme}
-          className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
-          title={!document.documentElement.classList.contains('dark') ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+          title={`Theme: ${themeMode} (click to switch)`}
+          className="p-2 rounded-xl border border-slate-200/60 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer transition-colors"
         >
-          {!document.documentElement.classList.contains('dark') ? (
-            <Moon className="w-4 h-4 text-slate-600" />
+          {themeMode === 'light' ? (
+            <Sun className="w-3.5 h-3.5 text-amber-500" />
           ) : (
-            <Sun className="w-4 h-4 text-amber-400" />
+            <Moon className="w-3.5 h-3.5 text-indigo-400" />
           )}
         </button>
 
-        {/* Sync Modal Button */}
+        {/* Device Sync & P2P Button */}
         <button
+          type="button"
           onClick={onOpenSync}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition-colors border border-slate-200/50 dark:border-slate-700 cursor-pointer"
-          title="GitHub PAT & Local P2P Wi-Fi Sync"
+          title="Device Pairing & Sync (P2P / GitHub)"
+          className="p-2 rounded-xl border border-slate-200/60 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer transition-colors"
         >
-          <GitBranch className="w-3.5 h-3.5 text-indigo-500" />
-          <span className="hidden md:inline">Sync</span>
+          <GitBranch className="w-3.5 h-3.5 text-emerald-500" />
         </button>
 
-        {/* Application Settings & Updates Button */}
+        {/* Settings Button */}
         <button
+          type="button"
           onClick={onOpenSettings}
-          className="p-2 text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors border border-slate-200/60 dark:border-slate-700 cursor-pointer"
-          title="Application Settings & Check for Updates"
+          title="Settings & Software Updates"
+          className="p-2 rounded-xl border border-slate-200/60 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer transition-colors"
         >
-          <Settings className="w-4 h-4 text-slate-700 dark:text-slate-200" />
+          <Settings className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
         </button>
 
-        {/* Export / Import Full Backup */}
-        <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5">
+        {/* Full JSON Backup Download & Upload */}
+        <div className="hidden sm:flex items-center border border-slate-200/60 dark:border-slate-700 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800">
           <button
+            type="button"
             onClick={onExportBackup}
-            className="p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors cursor-pointer"
-            title="Download JSON Clinical Backup"
+            title="Download full JSON backup (All patients, checklists & templates)"
+            className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer transition-colors"
           >
-            <Download className="w-5 h-5" />
+            <Download className="w-3.5 h-3.5 text-blue-500" />
           </button>
+          <div className="w-[1px] h-4 bg-slate-300 dark:bg-slate-700" />
           <button
+            type="button"
             onClick={onImportBackup}
-            className="p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors cursor-pointer"
-            title="Restore from JSON Clinical Backup"
+            title="Restore / Import JSON backup"
+            className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer transition-colors"
           >
-            <Upload className="w-5 h-5" />
+            <Upload className="w-3.5 h-3.5 text-purple-500" />
           </button>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { ClinicalTemplate } from './types/template';
 import { PatientEncounter, EncounterChecklistInstance } from './types/patient';
 import { WorkspaceTab, FolderItem, DEFAULT_TABS, TabType } from './types/tab';
 import { Header } from './components/common/Header';
+import { SidebarDrawer } from './components/common/SidebarDrawer';
 import { SearchModal } from './components/common/SearchModal';
 import { SyncModal } from './components/sync/SyncModal';
 import { LlmModal } from './components/llm/LlmModal';
@@ -48,6 +49,7 @@ export function App() {
   const [newPatientWard, setNewPatientWard] = useState<string | undefined>();
 
   // Modals & Mode States
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isBedsideMode, setIsBedsideMode] = useState<boolean>(false);
   const [showSearchModal, setShowSearchModal] = useState<boolean>(false);
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
@@ -92,11 +94,6 @@ export function App() {
         }
       }
     } catch {}
-
-    if (!selectedEncounterId && encs.length > 0) {
-      const firstActive = encs.find((e) => !e.isDeleted && e.status === 'active') || encs.find((e) => !e.isDeleted);
-      if (firstActive) setSelectedEncounterId(firstActive.id);
-    }
   };
 
   useEffect(() => {
@@ -136,7 +133,8 @@ export function App() {
         setShowSearchModal((prev) => !prev);
       }
       if (e.key === 'Escape') {
-        // Dismiss modals in priority order (topmost first)
+        // Dismiss modals and drawer in priority order (topmost first)
+        if (isSidebarOpen) { setIsSidebarOpen(false); return; }
         if (llmTarget) { setLlmTarget(null); return; }
         if (editingChecklist) { setEditingChecklist(null); return; }
         if (editingClinicalTemplate) { setEditingClinicalTemplate(null); return; }
@@ -151,7 +149,44 @@ export function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showSearchModal, showSyncModal, showSettingsModal, showNewPatientModal, showVaultModal, showFolderModal, showGalleryModal, editingChecklist, editingClinicalTemplate, llmTarget]);
+  }, [isSidebarOpen, showSearchModal, showSyncModal, showSettingsModal, showNewPatientModal, showVaultModal, showFolderModal, showGalleryModal, editingChecklist, editingClinicalTemplate, llmTarget]);
+
+  // Touch Swipe Gesture Listener (Swipe right from left edge to open sidebar, swipe left to close)
+  useEffect(() => {
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+      const deltaX = touchEndX - touchStartX;
+      const deltaY = touchEndY - touchStartY;
+
+      // Ensure horizontal swipe (minimal vertical drift)
+      if (Math.abs(deltaY) < 70) {
+        // Edge swipe right (< 50px from left edge) opens sidebar
+        if (!isSidebarOpen && touchStartX < 50 && deltaX > 60) {
+          setIsSidebarOpen(true);
+        }
+        // Swipe left when sidebar is open closes it
+        else if (isSidebarOpen && deltaX < -60) {
+          setIsSidebarOpen(false);
+        }
+      }
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [isSidebarOpen]);
 
   // Workspace Tabs Management
   const handleAddTab = async (title: string, type: TabType) => {
@@ -429,6 +464,7 @@ export function App() {
         tabs={tabs}
         activeTabId={activeTabId}
         onSelectTab={setActiveTabId}
+        onOpenSidebar={() => setIsSidebarOpen(true)}
         onOpenFolders={() => setShowFolderModal(true)}
         onOpenSearch={() => setShowSearchModal(true)}
         onOpenSync={() => setShowSyncModal(true)}
@@ -440,6 +476,28 @@ export function App() {
         onToggleTheme={handleToggleTheme}
         onCheckUpdate={handleCheckUpdate}
         onOpenSettings={() => setShowSettingsModal(true)}
+      />
+
+      <SidebarDrawer
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onSelectTab={(id) => {
+          setActiveTabId(id);
+          setIsSidebarOpen(false);
+        }}
+        activePatientCount={encounters.filter((e) => !e.isDeleted && (e.status || 'active') === 'active').length}
+        checklistCount={checklists.filter((c) => !c.isDeleted).length}
+        templateCount={clinicalTemplates.filter((t) => !t.isDeleted).length}
+        onOpenFolders={() => setShowFolderModal(true)}
+        onOpenSearch={() => setShowSearchModal(true)}
+        onOpenSync={() => setShowSyncModal(true)}
+        onOpenVault={() => setShowVaultModal(true)}
+        isVaultLocked={isVaultLocked}
+        onOpenSettings={() => setShowSettingsModal(true)}
+        themeMode={themeMode}
+        onToggleTheme={handleToggleTheme}
       />
 
       <main className="flex-1 min-h-0">

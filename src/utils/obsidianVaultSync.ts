@@ -3,6 +3,7 @@ import { ClinicalTemplate } from '../types/template';
 import { KnowledgeNote, ChecklistRunSession } from '../types/knowledge';
 import { FolderItem } from '../types/tab';
 import { db } from '../db/db';
+import { parseBibtex, exportToBibtex, DEFAULT_CLINICAL_BIBLIOGRAPHY, BibliographyEntry } from './bibtexParser';
 
 export interface VaultFileMap {
   [filePath: string]: string;
@@ -116,6 +117,7 @@ export function generateObsidianVaultFiles(data: {
   templates: ClinicalTemplate[];
   studyRuns: ChecklistRunSession[];
   folders: FolderItem[];
+  bibliography?: string;
 }): VaultFileMap {
   const files: VaultFileMap = {};
   const dateStr = new Date().toISOString().split('T')[0];
@@ -311,6 +313,7 @@ dead_links = true
       ward: note.ward,
       tags: note.tags || ['study'],
       aliases: [note.title],
+      bibliography: 'references.bib',
       type: 'knowledge_note',
       date: new Date(note.createdAt).toISOString().substring(0, 10),
       updated: new Date(note.updatedAt).toISOString(),
@@ -326,7 +329,10 @@ dead_links = true
     files[filename] = `${frontmatter}\n\n${noteBody}`;
   }
 
-  // 8. Vault Map of Content / Index (README.md)
+  // 8. Zettlr & Pandoc Bibliography Library (references.bib)
+  files['references.bib'] = data.bibliography || exportToBibtex(DEFAULT_CLINICAL_BIBLIOGRAPHY);
+
+  // 9. Vault Map of Content / Index (README.md)
   const indexLines: string[] = [
     buildYamlFrontmatter({
       title: 'Clinical Knowledge Vault Index',
@@ -497,6 +503,17 @@ export async function importVaultFilesFromDirectory(
 
           await db.knowledgeNotes.put(noteObj);
           notesImported++;
+        }
+      } else if (handle.kind === 'file' && (name.endsWith('.bib') || name.endsWith('.bibtex'))) {
+        filesProcessed++;
+        const file = await (handle as FileSystemFileHandle).getFile();
+        const text = await file.text();
+        const parsed = parseBibtex(text);
+        if (parsed.length > 0) {
+          const current = (await db.settings.get('knowledge_bibliography'))?.value || [];
+          const existingKeys = new Set(current.map((i: any) => i.id));
+          const merged = [...current, ...parsed.filter((p) => !existingKeys.has(p.id))];
+          await db.settings.put({ key: 'knowledge_bibliography', value: merged });
         }
       }
     }

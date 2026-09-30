@@ -19,6 +19,7 @@ import {
   FileText,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Archive,
   RotateCcw,
   PenTool,
@@ -236,20 +237,20 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
       }));
   }, [encounters]);
 
-  // Filter encounters by status (active vs archived), facility, and ward group
-  const visibleEncounters = encounters.filter((e) => {
-    if (e.isDeleted) return false;
-    const itemStatus = e.status || 'active';
-    if (itemStatus !== statusFilter) return false;
-    if (selectedFacilityFilter !== 'all' && e.facility !== selectedFacilityFilter) return false;
-    if (selectedGroupFilter !== 'all' && e.group !== selectedGroupFilter) return false;
-    return true;
-  });
+  const currentEncounter = encounters.find((e) => !e.isDeleted && e.id === selectedEncounterId);
 
-  const currentEncounter =
-    visibleEncounters.find((e) => e.id === selectedEncounterId) ||
-    visibleEncounters[0] ||
-    encounters.find((e) => !e.isDeleted && (e.status || 'active') === statusFilter);
+  // Other patients in the same facility and ward for fast bedside round switching
+  const wardPatients = React.useMemo(() => {
+    if (!currentEncounter) return [];
+    return encounters.filter(
+      (e) =>
+        !e.isDeleted &&
+        (currentEncounter.facility ? e.facility === currentEncounter.facility : true) &&
+        (currentEncounter.group ? e.group === currentEncounter.group : true)
+    );
+  }, [encounters, currentEncounter]);
+
+  const currentWardIndex = wardPatients.findIndex((e) => e.id === currentEncounter?.id);
 
   // Archive / Discharge patient
   const handleArchiveEncounter = (id: string) => {
@@ -634,46 +635,85 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-      {/* File Explorer Navigation & Patient Switcher Bar */}
+      {/* File Explorer Navigation & Rapid Patient Switcher Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs transition-colors">
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <button
             type="button"
-            onClick={() => setShowFileManager(true)}
+            onClick={() => {
+              setShowFileManager(true);
+              onSelectEncounter('');
+            }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-xl text-xs font-semibold transition-colors cursor-pointer border border-slate-200/60 dark:border-slate-700 shrink-0"
+            title="Return to Clinical File Explorer"
           >
             <Folder className="w-3.5 h-3.5 text-cyan-500" />
             <span>← File Explorer</span>
           </button>
 
           <div className="text-xs font-mono text-slate-500 dark:text-slate-400 flex items-center gap-1.5 truncate">
-            <span>{currentEncounter.facility || 'Facility'}</span>
+            <Building2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <span className="truncate">{currentEncounter.facility || 'Facility'}</span>
             <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
-            <span>{currentEncounter.group || 'Ward'}</span>
+            <Folder className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
+            <span className="truncate">{currentEncounter.group || 'Ward'}</span>
             <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
-            <span className="font-bold text-slate-900 dark:text-slate-100 truncate">{currentEncounter.patientIdentifier}</span>
+            <span className="font-bold text-slate-900 dark:text-slate-100 truncate flex items-center gap-1">
+              <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              {currentEncounter.patientIdentifier}
+            </span>
+            {currentEncounter.bedNumber && (
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
+                Bed {currentEncounter.bedNumber}
+              </span>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Quick Switch Patient in Same Ward */}
-          <select
-            value={currentEncounter.id}
-            onChange={(e) => onSelectEncounter(e.target.value)}
-            className="text-xs px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none"
-          >
-            {visibleEncounters.map((enc) => (
-              <option key={enc.id} value={enc.id}>
-                {enc.patientIdentifier} {enc.bedNumber ? `(Bed ${enc.bedNumber})` : ''}
-              </option>
-            ))}
-          </select>
+        {/* Rapid Patient Bed Switcher (Same Ward) & Actions */}
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          {wardPatients.length > 1 && (
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5 border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                disabled={currentWardIndex <= 0}
+                onClick={() => onSelectEncounter(wardPatients[currentWardIndex - 1].id)}
+                className="p-1 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed rounded-lg"
+                title="Previous Patient in this Ward"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <select
+                value={currentEncounter.id}
+                onChange={(e) => onSelectEncounter(e.target.value)}
+                className="text-xs px-2 py-1 bg-transparent text-slate-800 dark:text-slate-200 outline-none font-medium cursor-pointer"
+                title="Switch Patient in this Ward"
+              >
+                {wardPatients.map((enc) => (
+                  <option key={enc.id} value={enc.id} className="dark:bg-slate-900">
+                    {enc.patientIdentifier} {enc.bedNumber ? `(Bed ${enc.bedNumber})` : ''}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                disabled={currentWardIndex >= wardPatients.length - 1}
+                onClick={() => onSelectEncounter(wardPatients[currentWardIndex + 1].id)}
+                className="p-1 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed rounded-lg"
+                title="Next Patient in this Ward"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           {/* Pin Button */}
           <button
             type="button"
             onClick={() => onUpdateEncounter({ ...currentEncounter, isPinned: !currentEncounter.isPinned, updatedAt: Date.now() })}
-            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
               currentEncounter.isPinned
                 ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:text-amber-500'
@@ -683,43 +723,42 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
             <Star className={`w-3.5 h-3.5 ${currentEncounter.isPinned ? 'fill-current text-amber-400' : ''}`} />
             <span className="hidden sm:inline">{currentEncounter.isPinned ? 'Pinned' : 'Pin'}</span>
           </button>
-        </div>
-      </div>
-      {/* 1. Status Filter Tabs & Ward Filter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <div className="flex items-center gap-2">
-          {/* Active Rounds vs Archived Patients */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+
+          {/* 3 Interaction Modes Switcher */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800/90 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
             <button
-              onClick={() => {
-                setStatusFilter('active');
-                const firstActive = encounters.find((e) => !e.isDeleted && e.status === 'active');
-                if (firstActive) onSelectEncounter(firstActive.id);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                statusFilter === 'active'
+              onClick={() => setInputMode('keyboard')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                inputMode === 'keyboard'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
+              title="Standard Keyboard Input Mode"
             >
-              <Users className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Active Rounds ({encounters.filter((e) => !e.isDeleted && e.status === 'active').length})</span>
+              <Keyboard className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Keyboard</span>
             </button>
 
             <button
-              onClick={() => {
-                setStatusFilter('archived');
-                const firstArchived = encounters.find((e) => !e.isDeleted && e.status === 'archived');
-                if (firstArchived) onSelectEncounter(firstArchived.id);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                statusFilter === 'archived'
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+              onClick={() => setInputMode('box_handwriting')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                inputMode === 'box_handwriting'
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
+              title="Handwriting in Box: click any field to write with OCR"
             >
-              <Archive className="w-3.5 h-3.5 text-amber-500" />
-              <span>Archived / Discharged ({encounters.filter((e) => !e.isDeleted && e.status === 'archived').length})</span>
+              <Pen className="w-3.5 h-3.5 text-indigo-500" />
+              <span className="hidden sm:inline">Box OCR</span>
+            </button>
+
+            <button
+              onClick={onEnterPatientFacingMode}
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-all"
+              title="Enter Full Bedside Handwriting Mode"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span className="hidden sm:inline">Full Inking</span>
             </button>
           </div>
 
@@ -727,183 +766,16 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
           {onOpenGallery && (
             <button
               onClick={onOpenGallery}
-              className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors border border-slate-200/60 dark:border-slate-700"
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors border border-slate-200/60 dark:border-slate-700 cursor-pointer"
               title="Open Clinical Medical Image Gallery"
             >
               <ImageIcon className="w-3.5 h-3.5 text-rose-500" />
-              <span>Image Gallery</span>
             </button>
           )}
         </div>
-
-        {/* 3 Interaction Modes Switcher */}
-        <div className="flex items-center bg-slate-100 dark:bg-slate-800/90 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
-          <button
-            onClick={() => setInputMode('keyboard')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              inputMode === 'keyboard'
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-            title="Standard Keyboard Input Mode"
-          >
-            <Keyboard className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Keyboard</span>
-          </button>
-
-          <button
-            onClick={() => setInputMode('box_handwriting')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              inputMode === 'box_handwriting'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-            title="Handwriting in Box: click any field to write with OCR"
-          >
-            <Pen className="w-3.5 h-3.5 text-indigo-500" />
-            <span className="hidden sm:inline">Box OCR</span>
-          </button>
-
-          <button
-            onClick={onEnterPatientFacingMode}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-all"
-            title="Enter Full Bedside Handwriting Mode"
-          >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            <span className="hidden sm:inline">Full Inking</span>
-          </button>
-        </div>
       </div>
 
-      {/* Hospital / Clinic (Facility) Filter Pills */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-        <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mr-1 flex items-center gap-1">
-          <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-          <span>Facility:</span>
-        </span>
-
-        <button
-          onClick={() => setSelectedFacilityFilter('all')}
-          className={`px-3 py-1 rounded-lg font-medium transition-colors shrink-0 ${
-            selectedFacilityFilter === 'all'
-              ? 'bg-slate-900 dark:bg-indigo-600 text-white font-semibold shadow-xs'
-              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
-          }`}
-        >
-          All Facilities ({encounters.filter((e) => !e.isDeleted && (e.status || 'active') === statusFilter).length})
-        </button>
-
-        {availableFacilities.map((fac) => (
-          <button
-            key={fac}
-            onClick={() => setSelectedFacilityFilter(fac)}
-            className={`px-3 py-1 rounded-lg font-medium transition-colors shrink-0 ${
-              selectedFacilityFilter === fac
-                ? 'bg-slate-900 dark:bg-indigo-600 text-white font-semibold shadow-xs'
-                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
-            }`}
-          >
-            {fac} ({encounters.filter((e) => !e.isDeleted && e.facility === fac && (e.status || 'active') === statusFilter).length})
-          </button>
-        ))}
-      </div>
-
-      {/* Ward Filter Pills */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-        <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mr-1 flex items-center gap-1">
-          <Folder className="w-3 h-3 text-indigo-500" />
-          <span>Wards:</span>
-        </span>
-
-        <button
-          onClick={() => setSelectedGroupFilter('all')}
-          className={`px-3 py-1 rounded-lg font-medium transition-colors shrink-0 ${
-            selectedGroupFilter === 'all'
-              ? 'bg-slate-900 dark:bg-indigo-600 text-white font-semibold shadow-xs'
-              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
-          }`}
-        >
-          All Wards / Units
-        </button>
-
-        {availableGroups.map((grp) => (
-          <button
-            key={grp}
-            onClick={() => setSelectedGroupFilter(grp)}
-            className={`px-3 py-1 rounded-lg font-medium transition-colors shrink-0 ${
-              selectedGroupFilter === grp
-                ? 'bg-slate-900 dark:bg-indigo-600 text-white font-semibold shadow-xs'
-                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
-            }`}
-          >
-            {grp} ({encounters.filter((e) => !e.isDeleted && e.group === grp && (e.status || 'active') === statusFilter).length})
-          </button>
-        ))}
-      </div>
-
-      {/* Patient Encounter Tabs Ribbon */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-200/80 dark:border-slate-800">
-        {visibleEncounters.map((enc) => (
-          <button
-            key={enc.id}
-            onClick={() => onSelectEncounter(enc.id)}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 border ${
-              currentEncounter?.id === enc.id
-                ? 'bg-white dark:bg-slate-900 border-slate-900 dark:border-indigo-500 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'bg-white/60 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
-            }`}
-          >
-            <User className="w-3.5 h-3.5 text-slate-400" />
-            <span>{enc.patientIdentifier}</span>
-            {enc.bedNumber && (
-              <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.2 rounded font-mono font-normal">
-                {enc.bedNumber}
-              </span>
-            )}
-            {enc.group && (
-              <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 rounded">
-                {enc.group}
-              </span>
-            )}
-          </button>
-        ))}
-
-        {statusFilter === 'active' && (
-          <button
-            onClick={() => onOpenNewPatientModal()}
-            className="px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap border border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-600 hover:bg-white dark:hover:bg-slate-900 flex items-center gap-1 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New Patient Box</span>
-          </button>
-        )}
-      </div>
-
-      {(!currentEncounter || visibleEncounters.length === 0) ? (
-        <div className="max-w-4xl mx-auto p-12 text-center space-y-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-          <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto text-slate-500 dark:text-slate-400">
-            {statusFilter === 'archived' ? <Archive className="w-6 h-6" /> : <User className="w-6 h-6" />}
-          </div>
-          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-            {statusFilter === 'archived' ? 'No Archived Patients' : 'No Active Patients in this View'}
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-            {statusFilter === 'archived'
-              ? 'Completed patient encounters will appear here when archived from bedside rounds.'
-              : 'Create a new patient box or select "All Wards / Units" above.'}
-          </p>
-          {statusFilter === 'active' && (
-            <button
-              onClick={() => onOpenNewPatientModal()}
-              className="px-4 py-2 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-colors shadow-sm inline-flex items-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              <span>New Patient Encounter</span>
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
+      <div className="lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
           {/* Left Column: Sticky Patient Profile & Protocol Navigator in Landscape Mode */}
           <div className="lg:col-span-4 xl:col-span-4 lg:sticky lg:top-20 space-y-4 mb-6 lg:mb-0 max-h-[calc(100vh-5rem)] overflow-y-auto">
             {/* Patient Dossier Card */}
@@ -2075,7 +1947,6 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
           </div>
         </div>
       </div>
-      )}
 
       {/* Floating Handwriting-in-Box Scratchpad */}
       {activeHandwritingTarget && (

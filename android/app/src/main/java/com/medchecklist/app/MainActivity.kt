@@ -110,6 +110,13 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
     }
 
+    override fun onDestroy() {
+        if (::updateManager.isInitialized) {
+            updateManager.cleanup()
+        }
+        super.onDestroy()
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (webView.canGoBack()) {

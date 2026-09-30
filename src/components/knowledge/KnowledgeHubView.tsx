@@ -24,6 +24,7 @@ import {
   BookmarkCheck,
   HardDrive,
   Star,
+  Quote,
 } from 'lucide-react';
 import { KnowledgeNote } from '../../types/knowledge';
 import { Checklist, Folder as ChecklistFolder } from '../../types/checklist';
@@ -32,6 +33,15 @@ import { FolderItem } from '../../types/tab';
 import { db } from '../../db/db';
 import { ChecklistReaderModal } from '../checklists/ChecklistReaderModal';
 import { VaultSyncModal } from './VaultSyncModal';
+import { CitationModal } from './CitationModal';
+import {
+  BibliographyEntry,
+  DEFAULT_CLINICAL_BIBLIOGRAPHY,
+  extractCitationsFromMarkdown,
+  formatAuthorShort,
+  formatAuthorFull,
+  formatBibliographyItem,
+} from '../../utils/bibtexParser';
 
 interface KnowledgeHubViewProps {
   checklists: Checklist[];
@@ -54,9 +64,14 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({
   const [activeChecklistReader, setActiveChecklistReader] = useState<Checklist | null>(null);
   const [showVaultModal, setShowVaultModal] = useState<boolean>(false);
   
+  // Zettlr & BibTeX Bibliography Library state
+  const [bibliography, setBibliography] = useState<BibliographyEntry[]>(DEFAULT_CLINICAL_BIBLIOGRAPHY);
+  const [showCitationModal, setShowCitationModal] = useState<boolean>(false);
+  const [activeCitationPopover, setActiveCitationPopover] = useState<BibliographyEntry | null>(null);
+  
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
-  // Load knowledge notes from Dexie
+  // Load knowledge notes and bibliography library from Dexie
   const loadNotes = async () => {
     try {
       const allNotes = await db.knowledgeNotes.filter((n) => !n.isDeleted).reverse().sortBy('updatedAt');
@@ -64,8 +79,16 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({
       if (allNotes.length > 0 && !selectedNoteId) {
         setSelectedNoteId(allNotes[0].id);
       }
+
+      const savedBib = await db.settings.get('knowledge_bibliography');
+      if (savedBib?.value && Array.isArray(savedBib.value) && savedBib.value.length > 0) {
+        setBibliography(savedBib.value);
+      } else {
+        setBibliography(DEFAULT_CLINICAL_BIBLIOGRAPHY);
+        await db.settings.put({ key: 'knowledge_bibliography', value: DEFAULT_CLINICAL_BIBLIOGRAPHY });
+      }
     } catch (e) {
-      console.error('Error loading knowledge notes:', e);
+      console.error('Error loading knowledge notes & bibliography:', e);
     }
   };
 
@@ -184,6 +207,31 @@ Write your lecture or bedside study notes here.
     setShowLinkModal(false);
   };
 
+  // Update bibliography entries in memory and Dexie database
+  const handleUpdateBibliography = async (entries: BibliographyEntry[]) => {
+    setBibliography(entries);
+    await db.settings.put({ key: 'knowledge_bibliography', value: entries });
+  };
+
+  // Insert citation tag (e.g. [@citekey, p. 45]) into markdown at cursor
+  const handleInsertCitation = (citationText: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea || !selectedNote) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = selectedNote.content;
+    const replacement = ` ${citationText} `;
+
+    const newContent = text.substring(0, start) + replacement + text.substring(end);
+    handleUpdateNote({ content: newContent });
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + replacement.length, start + replacement.length);
+    }, 50);
+  };
+
   // Filter notes
   const filteredNotes = notes.filter((n) => {
     if (selectedFolderFilter !== 'all' && n.folderId !== selectedFolderFilter && n.facility !== selectedFolderFilter) {
@@ -203,9 +251,103 @@ Write your lecture or bedside study notes here.
   // Extract unique facilities
   const facilities = Array.from(new Set(folders.filter((f) => f.type === 'facility').map((f) => f.name)));
 
-  // Render markdown parser with interactive checklist badges
+  // Render markdown parser with interactive checklist badges and Zettlr citations
   const renderMarkdownPreview = (content: string) => {
     const lines = content.split('\n');
+
+    // Extract all citations in this note
+    const parsedCitations = extractCitationsFromMarkdown(content);
+    const citedKeys = Array.from(new Set(parsedCitations.map((c) => c.citekey.toLowerCase())));
+    const citedEntries = bibliography.filter((b) => citedKeys.includes(b.id.toLowerCase()));
+
+    // Helper to render inline citations like [@citekey] and @citekey
+    const renderInlineContent = (text: string) => {
+      const parts: React.ReactNode[] = [];
+      let lastIndex = 0;
+      // Match bracketed citation: [@citekey...] or standalone: @citekey
+      const citeRegex = /\[([^\]]*?@[a-zA-Z0-9_:\.\-]+[^\]]*?)\]|(?<=^|[\s(])@([a-zA-Z0-9_:\.\-]+)/g;
+      let match: RegExpExecArray | null;
+
+      while ((match = citeRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push(text.substring(lastIndex, match.index));
+        }
+
+        const full = match[0];
+        const bracketed = match[1];
+        const standalone = match[2];
+
+        if (bracketed) {
+          const subparts = bracketed.split(';').map((s) => s.trim());
+          parts.push(
+            <span key={match.index} className="inline-flex flex-wrap items-center gap-1 mx-0.5">
+              {subparts.map((sub, sIdx) => {
+                const cm = sub.match(/(.*?)(?:(-)?@([a-zA-Z0-9_:\.\-]+))(.*)/);
+                if (cm) {
+                  const prefix = cm[1]?.trim();
+                  const suppress = Boolean(cm[2]);
+                  const key = cm[3];
+                  let locator = cm[4]?.trim();
+                  if (locator?.startsWith(',')) locator = locator.substring(1).trim();
+
+                  const entry = bibliography.find((b) => b.id.toLowerCase() === key.toLowerCase());
+                  const author = entry ? formatAuthorShort(entry.author) : key;
+                  const year = entry?.year || '';
+
+                  let displayText = '';
+                  if (suppress) {
+                    displayText = [year, locator].filter(Boolean).join(', ');
+                  } else {
+                    const main = year ? `${author}, ${year}` : author;
+                    const withPref = prefix ? `${prefix} ${main}` : main;
+                    displayText = locator ? `${withPref}, ${locator}` : withPref;
+                  }
+
+                  return (
+                    <button
+                      key={sIdx}
+                      type="button"
+                      onClick={() => setActiveCitationPopover(entry || { id: key, title: key, type: 'misc' })}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md bg-purple-100/80 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900 border border-purple-200 dark:border-purple-800 text-[11px] font-mono cursor-pointer transition-colors"
+                      title={entry ? `${entry.title} (${entry.author || 'Unknown'})` : `@${key}`}
+                    >
+                      <Quote className="w-2.5 h-2.5 text-purple-500 shrink-0" />
+                      <span>({displayText})</span>
+                    </button>
+                  );
+                }
+                return <span key={sIdx}>{sub}</span>;
+              })}
+            </span>
+          );
+        } else if (standalone) {
+          const entry = bibliography.find((b) => b.id.toLowerCase() === standalone.toLowerCase());
+          const author = entry ? formatAuthorShort(entry.author) : standalone;
+          const year = entry?.year ? ` (${entry.year})` : '';
+
+          parts.push(
+            <button
+              key={match.index}
+              type="button"
+              onClick={() => setActiveCitationPopover(entry || { id: standalone, title: standalone, type: 'misc' })}
+              className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md bg-purple-100/80 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900 border border-purple-200 dark:border-purple-800 text-[11px] font-mono cursor-pointer transition-colors mx-0.5"
+              title={entry ? `${entry.title} (${entry.author || 'Unknown'})` : `@${standalone}`}
+            >
+              <Quote className="w-2.5 h-2.5 text-purple-500 shrink-0" />
+              <span>{author}{year}</span>
+            </button>
+          );
+        }
+
+        lastIndex = match.index + full.length;
+      }
+
+      if (lastIndex < text.length) {
+        parts.push(text.substring(lastIndex));
+      }
+
+      return parts.length > 0 ? parts : text;
+    };
 
     return (
       <div className="space-y-3 font-sans text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed select-text">
@@ -215,7 +357,7 @@ Write your lecture or bedside study notes here.
             return (
               <h1
                 key={idx}
-                className="text-lg sm:text-xl font-bold text-slate-950 dark:text-white border-b border-slate-200 dark:border-slate-800 pb-1.5 mt-4 first:mt-0"
+                className="text-lg sm:text-xl font-bold text-slate-950 dark:white border-b border-slate-200 dark:border-slate-800 pb-1.5 mt-4 first:mt-0"
               >
                 {line.substring(2)}
               </h1>
@@ -246,7 +388,7 @@ Write your lecture or bedside study notes here.
                 key={idx}
                 className="p-3 bg-indigo-50/70 dark:bg-indigo-950/30 border-l-4 border-indigo-500 rounded-r-xl text-slate-700 dark:text-slate-300 font-medium italic my-2"
               >
-                {line.substring(2)}
+                {renderInlineContent(line.substring(2))}
               </div>
             );
           }
@@ -299,7 +441,7 @@ Write your lecture or bedside study notes here.
                   <button
                     type="button"
                     onClick={() => setActiveChecklistReader(targetChk)}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors shadow-2xs"
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
                   >
                     <span>Practice / Study</span>
                     <ExternalLink className="w-3 h-3" />
@@ -340,7 +482,7 @@ Write your lecture or bedside study notes here.
                   <button
                     type="button"
                     onClick={() => setSelectedNoteId(targetNote.id)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-xs font-semibold transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-xs font-semibold transition-colors cursor-pointer"
                   >
                     <FileText className="w-3.5 h-3.5 text-indigo-500" />
                     <span>[[{displayName}]]</span>
@@ -377,7 +519,7 @@ Write your lecture or bedside study notes here.
                 <button
                   type="button"
                   onClick={() => targetChk && setActiveChecklistReader(targetChk)}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors shadow-2xs"
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
                 >
                   <span>Practice / Study</span>
                   <ExternalLink className="w-3 h-3" />
@@ -438,7 +580,7 @@ Write your lecture or bedside study notes here.
                       : 'text-slate-800 dark:text-slate-200 font-medium'
                   }
                 >
-                  {text}
+                  {renderInlineContent(text)}
                 </span>
               </div>
             );
@@ -449,7 +591,7 @@ Write your lecture or bedside study notes here.
             return (
               <div key={idx} className="flex items-start gap-2 py-0.5 pl-2">
                 <span className="text-indigo-500 font-bold">•</span>
-                <span>{line.substring(2)}</span>
+                <span>{renderInlineContent(line.substring(2))}</span>
               </div>
             );
           }
@@ -462,12 +604,50 @@ Write your lecture or bedside study notes here.
           // Standard paragraph
           return line.trim() ? (
             <p key={idx} className="leading-relaxed">
-              {line}
+              {renderInlineContent(line)}
             </p>
           ) : (
             <div key={idx} className="h-2" />
           );
         })}
+
+        {/* Automated Zettlr & Pandoc References / Bibliography Section */}
+        {citedEntries.length > 0 && (
+          <div className="mt-8 pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-purple-500" />
+                <span>References</span>
+              </h3>
+              <span className="text-[10px] font-mono text-slate-400">
+                {citedEntries.length} cited (Zettlr / CSL Standard)
+              </span>
+            </div>
+            <div className="space-y-2.5 font-serif text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+              {citedEntries.map((entry, i) => (
+                <div key={entry.id} className="pl-4 -indent-4 flex items-start justify-between gap-2 group">
+                  <div>
+                    <span className="font-mono text-[10px] text-purple-600 dark:text-purple-400 mr-1.5 font-bold">
+                      [{i + 1}]
+                    </span>
+                    <span>{formatBibliographyItem(entry)}</span>
+                  </div>
+                  {entry.doi && (
+                    <a
+                      href={`https://doi.org/${entry.doi.replace(/^https?:\/\/doi\.org\//, '')}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-indigo-600 dark:text-indigo-400 shrink-0 p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded opacity-60 group-hover:opacity-100 transition-opacity"
+                      title="Open DOI"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -498,8 +678,18 @@ Write your lecture or bedside study notes here.
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => setShowCitationModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            title="Manage Zettlr & BibTeX Citations (.bib)"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>Bibliography ({bibliography.length})</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setShowVaultModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-xl text-xs font-semibold shadow-xs transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
             title="Sync with Desktop Obsidian Vault, Zettlr, and markdown-oxide"
           >
             <HardDrive className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
@@ -938,11 +1128,21 @@ Write your lecture or bedside study notes here.
                 <button
                   type="button"
                   onClick={() => setShowLinkModal(true)}
-                  className="px-2 py-0.5 hover:bg-emerald-100 dark:hover:bg-emerald-950/60 rounded text-emerald-700 dark:text-emerald-300 font-semibold flex items-center gap-1"
+                  className="px-2 py-0.5 hover:bg-emerald-100 dark:hover:bg-emerald-950/60 rounded text-emerald-700 dark:text-emerald-300 font-semibold flex items-center gap-1 cursor-pointer"
                   title="Insert Protocol Checklist Reference"
                 >
                   <Plus className="w-3 h-3" />
                   <span>Checklist Link</span>
+                </button>
+                <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+                <button
+                  type="button"
+                  onClick={() => setShowCitationModal(true)}
+                  className="px-2 py-0.5 hover:bg-purple-100 dark:hover:bg-purple-950/60 rounded text-purple-700 dark:text-purple-300 font-semibold flex items-center gap-1 cursor-pointer"
+                  title="Insert Zettlr Citation ([@citekey, p. 45])"
+                >
+                  <BookOpen className="w-3 h-3 text-purple-500" />
+                  <span>Citation</span>
                 </button>
               </div>
             )}
@@ -1077,6 +1277,100 @@ Write your lecture or bedside study notes here.
           onRefreshNotes={loadNotes}
           onClose={() => setShowVaultModal(false)}
         />
+      )}
+
+      {/* Zettlr & BibTeX Bibliography & Citation Modal */}
+      {showCitationModal && (
+        <CitationModal
+          entries={bibliography}
+          onInsertCitation={handleInsertCitation}
+          onUpdateEntries={handleUpdateBibliography}
+          onClose={() => setShowCitationModal(false)}
+        />
+      )}
+
+      {/* Interactive Citation Detail Popover */}
+      {activeCitationPopover && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setActiveCitationPopover(null)}
+        >
+          <div
+            className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                  @{activeCitationPopover.id}
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 uppercase">
+                  {activeCitationPopover.type}
+                </span>
+              </div>
+              <button
+                onClick={() => setActiveCitationPopover(null)}
+                className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-snug">
+                {activeCitationPopover.title}
+              </h3>
+              {activeCitationPopover.author && (
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium mt-1">
+                  {formatAuthorFull(activeCitationPopover.author)}
+                </p>
+              )}
+              {activeCitationPopover.journal && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 italic mt-0.5">
+                  {activeCitationPopover.journal}
+                  {activeCitationPopover.volume ? `, ${activeCitationPopover.volume}` : ''}
+                  {activeCitationPopover.number ? `(${activeCitationPopover.number})` : ''}
+                  {activeCitationPopover.pages ? `: ${activeCitationPopover.pages}` : ''}
+                  {activeCitationPopover.year ? ` (${activeCitationPopover.year})` : ''}
+                </p>
+              )}
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono block mb-1">
+                Full Bibliography Reference
+              </span>
+              <p className="text-xs text-slate-800 dark:text-slate-200 font-serif leading-relaxed">
+                {formatBibliographyItem(activeCitationPopover)}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              {activeCitationPopover.doi ? (
+                <a
+                  href={`https://doi.org/${activeCitationPopover.doi.replace(/^https?:\/\/doi\.org\//, '')}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1 font-mono"
+                >
+                  <span>Open DOI</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              ) : <div />}
+
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(`[@${activeCitationPopover.id}]`);
+                  setActiveCitationPopover(null);
+                }}
+                className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                Copy [@{activeCitationPopover.id}]
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
