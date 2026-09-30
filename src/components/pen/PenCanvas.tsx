@@ -260,17 +260,35 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     };
   }, [updateBackgroundBuffer, renderDisplay]);
 
-  // Prevent context menu on long press
+  // CRITICAL: Prevent browser from hijacking touch/pen events as scroll/gesture.
+  // CSS touch-action:none is NOT sufficient on Android WebView — JS-level preventDefault()
+  // on touchstart/touchmove is required to stop the gesture recognizer from firing
+  // pointercancel events which kill in-progress strokes.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    const preventTouch = (e: TouchEvent) => {
+      // Only prevent default when we're actively drawing or the tool requires it
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
 
     const preventContextMenu = (e: MouseEvent) => {
       e.preventDefault();
     };
 
+    // { passive: false } is required to allow preventDefault() in touch handlers
+    canvas.addEventListener('touchstart', preventTouch, { passive: false });
+    canvas.addEventListener('touchmove', preventTouch, { passive: false });
+    canvas.addEventListener('touchend', preventTouch, { passive: false });
     canvas.addEventListener('contextmenu', preventContextMenu);
+
     return () => {
+      canvas.removeEventListener('touchstart', preventTouch);
+      canvas.removeEventListener('touchmove', preventTouch);
+      canvas.removeEventListener('touchend', preventTouch);
       canvas.removeEventListener('contextmenu', preventContextMenu);
     };
   }, []);

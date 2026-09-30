@@ -236,6 +236,33 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
     renderCanvas();
   }, [updateBackgroundBuffer, renderCanvas]);
 
+  // CRITICAL: Same touch event prevention as PenCanvas — required for Android WebView
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const preventTouch = (e: TouchEvent) => {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+    const preventContext = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    canvas.addEventListener('touchstart', preventTouch, { passive: false });
+    canvas.addEventListener('touchmove', preventTouch, { passive: false });
+    canvas.addEventListener('touchend', preventTouch, { passive: false });
+    canvas.addEventListener('contextmenu', preventContext);
+
+    return () => {
+      canvas.removeEventListener('touchstart', preventTouch);
+      canvas.removeEventListener('touchmove', preventTouch);
+      canvas.removeEventListener('touchend', preventTouch);
+      canvas.removeEventListener('contextmenu', preventContext);
+    };
+  }, []);
+
   useEffect(() => {
     updateBackgroundBuffer();
     renderCanvas();
@@ -833,6 +860,26 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onContextMenu={(e) => e.preventDefault()}
+          onPointerCancel={() => {
+            // Commit in-flight stroke if valid to prevent gesture cancellation data loss on Android
+            if (isDrawingRef.current && activePointsRef.current.length > 1) {
+              const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+              const newStroke: InkStroke = {
+                id: 'stroke-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+                points: [...activePointsRef.current],
+                color: isDark ? '#f8fafc' : '#0f172a',
+                size: 3.5,
+                tool: 'pen',
+                timestamp: Date.now(),
+              };
+              const newStrokes = [...strokes, newStroke];
+              setStrokes(newStrokes);
+              runOcr(newStrokes);
+            }
+            isDrawingRef.current = false;
+            activePointsRef.current = [];
+            scheduleRender();
+          }}
           className="w-full h-full block cursor-crosshair touch-none"
           style={{ touchAction: 'none' }}
         />
