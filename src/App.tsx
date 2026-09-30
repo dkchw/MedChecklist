@@ -592,6 +592,9 @@ export function App() {
               onOpenChecklistReader={(chk) => {
                 setEditingChecklist(chk);
               }}
+              onCreateFolder={handleCreateFolder}
+              onRenameFolder={handleRenameFolder}
+              onDeleteFolder={handleDeleteFolder}
             />
           </div>
         )}

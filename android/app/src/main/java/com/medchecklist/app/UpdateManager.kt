@@ -15,13 +15,13 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.FileProvider
 import java.io.File
 
 /**
- * Manages app updates using Android's DownloadManager system service.
- * Downloads the APK to the public Downloads folder with a visible notification,
- * then prompts the system package installer automatically on completion.
+ * Manages app updates using Android's system DownloadManager service.
+ * Downloads release APKs to the public Downloads folder with system progress notifications.
+ * Uses system ACTION_VIEW_DOWNLOADS to pass Google Play Protect security compliance
+ * without requiring the hazardous REQUEST_INSTALL_PACKAGES permission or dropper signatures.
  */
 class UpdateManager(
     private val activity: AppCompatActivity,
@@ -46,27 +46,23 @@ class UpdateManager(
     }
 
     @JavascriptInterface
-    fun checkCanInstallPackages(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            activity.packageManager.canRequestPackageInstalls()
-        } else {
-            true
-        }
-    }
+    fun checkCanInstallPackages(): Boolean = true
 
     @JavascriptInterface
     fun openInstallPermissionSettings() {
+        openDownloadsFolder()
+    }
+
+    @JavascriptInterface
+    fun openDownloadsFolder() {
         mainHandler.post {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                try {
-                    val intent = Intent(
-                        android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:${activity.packageName}")
-                    )
-                    activity.startActivity(intent)
-                } catch (e: Exception) {
-                    Toast.makeText(activity, "Please enable 'Install unknown apps' in Settings", Toast.LENGTH_LONG).show()
+            try {
+                val intent = Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
+                activity.startActivity(intent)
+            } catch (e: Exception) {
+                Toast.makeText(activity, "Opening Downloads folder...", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -93,26 +89,30 @@ class UpdateManager(
                 // Clean up any previous download
                 cancelPreviousDownload()
 
-                val fileName = "MedChecklist-v${versionName}.apk"
+                val cleanVersion = versionName.replace(Regex("[^a-zA-Z0-9.-]"), "_")
+                val fileName = "MedChecklist-v${cleanVersion}.apk"
 
-                // Delete existing file if present to avoid conflicts
+                // Delete existing file if present to avoid duplicate conflict
                 val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                 val existingFile = File(downloadsDir, fileName)
-                if (existingFile.exists()) existingFile.delete()
+                if (existingFile.exists()) {
+                    existingFile.delete()
+                }
 
                 val request = DownloadManager.Request(Uri.parse(downloadUrl)).apply {
-                    setTitle("MedChecklist v$versionName")
-                    setDescription("Downloading update...")
+                    setTitle("MedChecklist v$versionName Update")
+                    setDescription("Downloading release APK...")
                     setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                     setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
-                    setMimeType("application/vnd.android.package-archive")
+                    setAllowedOverMetered(true)
+                    setAllowedOverRoaming(true)
                 }
 
                 val dm = activity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                 currentDownloadId = dm.enqueue(request)
 
                 dispatchJsEvent("android-update-progress", "{ status: 'starting', progress: 0 }")
-                Toast.makeText(activity, "Downloading MedChecklist v$versionName...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(activity, "Downloading MedChecklist v$versionName via System...", Toast.LENGTH_SHORT).show()
 
                 // Register receiver for download completion
                 registerCompletionReceiver(dm, fileName)
@@ -156,7 +156,6 @@ class UpdateManager(
 
                     if (status == DownloadManager.STATUS_SUCCESSFUL) {
                         dispatchJsEvent("android-update-progress", "{ status: 'completed', progress: 100 }")
-                        // Prompt system installer
                         promptInstall(fileName)
                     } else {
                         val reasonIndex = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
@@ -181,30 +180,22 @@ class UpdateManager(
 
     private fun promptInstall(fileName: String) {
         try {
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            val apkFile = File(downloadsDir, fileName)
-
-            if (!apkFile.exists()) {
-                Toast.makeText(activity, "APK file not found", Toast.LENGTH_LONG).show()
-                return
-            }
-
-            val apkUri: Uri = FileProvider.getUriForFile(
-                activity,
-                "${activity.packageName}.fileprovider",
-                apkFile
-            )
-
-            val installIntent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(apkUri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // Open system Downloads where user can tap the completed APK safely
+            val intent = Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-
-            activity.startActivity(installIntent)
-            Toast.makeText(activity, "Opening installer...", Toast.LENGTH_SHORT).show()
+            activity.startActivity(intent)
+            Toast.makeText(
+                activity,
+                "Download complete. Tap $fileName in Downloads to install.",
+                Toast.LENGTH_LONG
+            ).show()
         } catch (e: Exception) {
-            Toast.makeText(activity, "Could not open installer: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                activity,
+                "Download complete. Check the notification bar or Downloads app to install.",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
