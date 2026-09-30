@@ -52,6 +52,8 @@ import { HandwritingOcrService } from '../../utils/handwritingOcr';
 import { PenTool as PenToolType } from '../../types/ink';
 import { FolderItem } from '../../types/tab';
 import { ClinicalFileManager, FileItem } from '../common/ClinicalFileManager';
+import { getPendingInkItems } from '../../utils/pendingInk';
+import { PendingInkModal } from '../pen/PendingInkModal';
 
 interface PatientEncounterViewProps {
   encounters: PatientEncounter[];
@@ -122,6 +124,23 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
       setShowFileManager(false);
     }
   }, [selectedEncounterId]);
+
+  // Pending handwriting reminder queue
+  const [pendingInkCount, setPendingInkCount] = useState<number>(0);
+  const [showPendingInkModal, setShowPendingInkModal] = useState<boolean>(false);
+
+  const checkPendingInk = async () => {
+    try {
+      const items = await getPendingInkItems();
+      setPendingInkCount(items.length);
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    checkPendingInk();
+    const interval = setInterval(checkPendingInk, 4000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Clinical Recall Popover state
   const [activeRecall, setActiveRecall] = useState<{
@@ -634,6 +653,27 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
 
   return (
     <div className="w-full max-w-full px-3 sm:px-6 py-4 space-y-5 overflow-x-hidden">
+      {/* Pending Handwriting Reminder Banner */}
+      {pendingInkCount > 0 && (
+        <div className="bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 rounded-2xl p-3 sm:px-4 flex items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200 animate-in fade-in">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 border border-amber-500/30">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <span className="truncate">
+              <strong>{pendingInkCount} Saved Handwriting {pendingInkCount === 1 ? 'Note' : 'Notes'}:</strong> Fast bedside inking captured without OCR. Transcribe to text whenever ready.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowPendingInkModal(true)}
+            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs cursor-pointer shrink-0"
+          >
+            Review & Transcribe
+          </button>
+        </div>
+      )}
+
       {/* File Explorer Navigation & Rapid Patient Switcher Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs transition-colors">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -2048,6 +2088,27 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
           onClose={() => setEditingImage(null)}
         />
       )}
+
+      {/* Pending Saved Handwriting Queue Modal */}
+      <PendingInkModal
+        isOpen={showPendingInkModal}
+        onClose={() => {
+          setShowPendingInkModal(false);
+          checkPendingInk();
+        }}
+        onApplyText={(text) => {
+          if (currentEncounter) {
+            const updatedNotes = currentEncounter.generalNotes
+              ? `${currentEncounter.generalNotes}\n${text}`
+              : text;
+            onUpdateEncounter({
+              ...currentEncounter,
+              generalNotes: updatedNotes,
+              updatedAt: Date.now(),
+            });
+          }
+        }}
+      />
     </div>
   );
 };

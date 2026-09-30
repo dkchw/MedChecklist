@@ -260,28 +260,17 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     };
   }, [updateBackgroundBuffer, renderDisplay]);
 
-  // Prevent native Android WebView gesture/scroll interference when drawing
+  // Prevent context menu on long press
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
-    const preventTouchScroll = (e: TouchEvent) => {
-      if (e.cancelable) {
-        e.preventDefault();
-      }
-    };
 
     const preventContextMenu = (e: MouseEvent) => {
       e.preventDefault();
     };
 
-    canvas.addEventListener('touchstart', preventTouchScroll, { passive: false });
-    canvas.addEventListener('touchmove', preventTouchScroll, { passive: false });
     canvas.addEventListener('contextmenu', preventContextMenu);
-
     return () => {
-      canvas.removeEventListener('touchstart', preventTouchScroll);
-      canvas.removeEventListener('touchmove', preventTouchScroll);
       canvas.removeEventListener('contextmenu', preventContextMenu);
     };
   }, []);
@@ -305,15 +294,21 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
   // Helper to detect if stylus barrel / eraser button is currently pressed
   const isPenEraserActive = (e: React.PointerEvent<HTMLCanvasElement> | PointerEvent): boolean => {
     return (
-      e.pointerType === 'pen' &&
-      ((e.buttons & 2) !== 0 || (e.buttons & 32) !== 0 || e.button === 2 || e.button === 5)
+      (e.pointerType as string) === 'eraser' ||
+      ((e.pointerType as string) === 'pen' &&
+        ((e.buttons & 2) !== 0 ||
+          (e.buttons & 4) !== 0 ||
+          (e.buttons & 32) !== 0 ||
+          e.button === 2 ||
+          e.button === 5 ||
+          (e as any).altKey))
     );
   };
 
   // Pointer Down
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     // Palm Rejection Guard
-    if (penOnlyMode && e.pointerType !== 'pen') {
+    if (penOnlyMode && (e.pointerType as string) !== 'pen' && (e.pointerType as string) !== 'eraser') {
       return;
     }
 
@@ -368,7 +363,7 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
 
   // Pointer Move (Zero-Lag with Coalesced Events & RAF Scheduling)
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (penOnlyMode && e.pointerType !== 'pen') return;
+    if (penOnlyMode && (e.pointerType as string) !== 'pen' && (e.pointerType as string) !== 'eraser') return;
     if (!isDrawingRef.current) return;
     if (e.cancelable) {
       e.preventDefault();
@@ -414,7 +409,7 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
 
   // Pointer Up (Commit Stroke Once)
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (penOnlyMode && e.pointerType !== 'pen') return;
+    if (penOnlyMode && (e.pointerType as string) !== 'pen' && (e.pointerType as string) !== 'eraser') return;
     isDrawingRef.current = false;
 
     const isEraser = tool === 'eraser' || isPenEraserActive(e);

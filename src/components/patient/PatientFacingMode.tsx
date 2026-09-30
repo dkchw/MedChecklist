@@ -49,6 +49,8 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
 
   // Modes: 'pen' | 'interactive_text'
   const [isPenMode, setIsPenMode] = useState<boolean>(true);
+  const [canvasLayout, setCanvasLayout] = useState<'whiteboard' | 'sheet'>('whiteboard');
+  const [whiteboardPattern, setWhiteboardPattern] = useState<'blank' | 'grid' | 'dots' | 'ruled'>('grid');
   const [currentTool, setCurrentTool] = useState<PenTool>('pen');
   const [currentColor, setCurrentColor] = useState<string>(isDark ? '#f8fafc' : '#0f172a');
   const [currentSize, setCurrentSize] = useState<number>(3);
@@ -449,32 +451,85 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
             </button>
           </div>
 
-          {/* Mode Switcher: Pen Inking vs Text Select / Interactive */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+          {/* Canvas Mode Switcher: Full Whiteboard vs Sheet Dossier */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
             <button
-              onClick={() => setIsPenMode(true)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                isPenMode
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+              type="button"
+              onClick={() => setCanvasLayout('whiteboard')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                canvasLayout === 'whiteboard'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
+              title="Full Edge-to-Edge Canvas Whiteboard"
             >
-              <PenToolIcon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span>Pen Mode</span>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Full Canvas</span>
             </button>
             <button
-              onClick={() => setIsPenMode(false)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                !isPenMode
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+              type="button"
+              onClick={() => setCanvasLayout('sheet')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                canvasLayout === 'sheet'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
-              title="Allow selecting text and checking boxes underneath ink"
+              title="Bedside Dossier Sheet with Structured Patient Checklists"
             >
-              <CheckSquare className="w-3.5 h-3.5" />
-              <span>Select Text</span>
+              <FileText className="w-3.5 h-3.5" />
+              <span>Dossier</span>
             </button>
           </div>
+
+          {/* Whiteboard Background Pattern Switcher */}
+          {canvasLayout === 'whiteboard' && (
+            <div className="hidden sm:flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+              {(['grid', 'dots', 'ruled', 'blank'] as const).map((pat) => (
+                <button
+                  key={pat}
+                  type="button"
+                  onClick={() => setWhiteboardPattern(pat)}
+                  className={`px-2 py-1 rounded-lg text-xs font-semibold capitalize transition-all cursor-pointer ${
+                    whiteboardPattern === pat
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                  title={`${pat} paper pattern`}
+                >
+                  {pat}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Mode Switcher: Pen Inking vs Text Select / Interactive (for Sheet mode) */}
+          {canvasLayout === 'sheet' && (
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <button
+                onClick={() => setIsPenMode(true)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  isPenMode
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <PenToolIcon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>Pen Mode</span>
+              </button>
+              <button
+                onClick={() => setIsPenMode(false)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  !isPenMode
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Allow selecting text and checking boxes underneath ink"
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+                <span>Select Text</span>
+              </button>
+            </div>
+          )}
 
           {/* 4-Direction Expand & Pan Controls */}
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
@@ -538,44 +593,107 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
         </div>
       </header>
 
-      {/* Main Dual-Layer Document Area */}
-      <div
-        ref={documentContainerRef}
-        className={`flex-1 relative p-4 sm:p-8 flex items-start justify-center ${
-          isPenMode ? 'overflow-hidden touch-none select-none' : 'overflow-auto'
-        }`}
-        style={{
-          touchAction: isPenMode ? 'none' : 'auto',
-          overscrollBehavior: 'none',
-        }}
-      >
-        {/* Paper-Like Document Sheet */}
+      {/* Main Document & Canvas Area */}
+      {canvasLayout === 'whiteboard' ? (
         <div
-          className={`relative bg-white dark:bg-slate-900 shadow-2xl rounded-2xl border border-slate-200/90 dark:border-slate-800 w-full max-w-4xl min-h-[900px] p-8 sm:p-12 transition-transform duration-75 ${
-            isPenMode ? 'touch-none select-none' : 'select-text'
-          }`}
+          ref={documentContainerRef}
+          className="flex-1 relative w-full h-full overflow-hidden touch-none select-none bg-white dark:bg-slate-950"
           style={{
-            transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
-            transformOrigin: 'top center',
-            touchAction: isPenMode ? 'none' : 'auto',
+            touchAction: 'none',
+            overscrollBehavior: 'none',
           }}
         >
-          {/* Transparent Stylus Inking Overlay */}
-          {isPenMode && (
-            <PenCanvas
-              strokes={strokes}
-              onChangeStrokes={handleUpdateStrokes}
-              tool={currentTool}
-              color={currentColor}
-              size={currentSize}
-              pageIndex={currentPageIndex}
-              panX={0}
-              panY={0}
-              zoom={1}
-              penOnlyMode={penOnlyMode}
-              className="absolute inset-0 z-20 pointer-events-auto"
+          {/* Subtle Whiteboard Paper Pattern */}
+          {whiteboardPattern === 'grid' && (
+            <div
+              className="absolute inset-0 pointer-events-none opacity-20 dark:opacity-10"
+              style={{
+                backgroundImage:
+                  'radial-gradient(circle, #6366f1 1px, transparent 1px), linear-gradient(to right, #cbd5e1 1px, transparent 1px), linear-gradient(to bottom, #cbd5e1 1px, transparent 1px)',
+                backgroundSize: '24px 24px',
+              }}
             />
           )}
+          {whiteboardPattern === 'dots' && (
+            <div
+              className="absolute inset-0 pointer-events-none opacity-25 dark:opacity-15"
+              style={{
+                backgroundImage: 'radial-gradient(circle, #94a3b8 1.5px, transparent 1.5px)',
+                backgroundSize: '24px 24px',
+              }}
+            />
+          )}
+          {whiteboardPattern === 'ruled' && (
+            <div
+              className="absolute inset-0 pointer-events-none opacity-25 dark:opacity-15"
+              style={{
+                backgroundImage: 'linear-gradient(to bottom, #cbd5e1 1px, transparent 1px)',
+                backgroundSize: '100% 32px',
+              }}
+            />
+          )}
+
+          {/* Full Screen Stylus & Pen Canvas */}
+          <PenCanvas
+            strokes={strokes}
+            onChangeStrokes={handleUpdateStrokes}
+            tool={currentTool}
+            color={currentColor}
+            size={currentSize}
+            pageIndex={currentPageIndex}
+            panX={panX}
+            panY={panY}
+            zoom={zoom}
+            penOnlyMode={penOnlyMode}
+            className="absolute inset-0 z-10 w-full h-full pointer-events-auto"
+          />
+
+          {/* Bottom Inking Info Pill */}
+          <div className="absolute bottom-4 left-4 z-20 pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/80 dark:border-slate-700 text-[11px] font-mono text-slate-600 dark:text-slate-300 shadow-xs">
+            <span>Strokes: {strokes.filter((s) => (s.pageIndex ?? 0) === currentPageIndex).length}</span>
+            <span>•</span>
+            <span>{encounter.patientIdentifier}</span>
+          </div>
+        </div>
+      ) : (
+        /* Sheet Dossier Mode */
+        <div
+          ref={documentContainerRef}
+          className={`flex-1 relative p-4 sm:p-8 flex items-start justify-center bg-slate-100/70 dark:bg-slate-950 ${
+            isPenMode ? 'overflow-hidden touch-none select-none' : 'overflow-auto'
+          }`}
+          style={{
+            touchAction: isPenMode ? 'none' : 'auto',
+            overscrollBehavior: 'none',
+          }}
+        >
+          {/* Paper-Like Document Sheet */}
+          <div
+            className={`relative bg-white dark:bg-slate-900 shadow-2xl rounded-2xl border border-slate-200/90 dark:border-slate-800 w-full max-w-4xl min-h-[900px] p-8 sm:p-12 transition-transform duration-75 ${
+              isPenMode ? 'touch-none select-none' : 'select-text'
+            }`}
+            style={{
+              transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
+              transformOrigin: 'top center',
+              touchAction: isPenMode ? 'none' : 'auto',
+            }}
+          >
+            {/* Transparent Stylus Inking Overlay */}
+            {isPenMode && (
+              <PenCanvas
+                strokes={strokes}
+                onChangeStrokes={handleUpdateStrokes}
+                tool={currentTool}
+                color={currentColor}
+                size={currentSize}
+                pageIndex={currentPageIndex}
+                panX={0}
+                panY={0}
+                zoom={1}
+                penOnlyMode={penOnlyMode}
+                className="absolute inset-0 z-20 pointer-events-auto"
+              />
+            )}
 
           {/* Base Document Layer: Selectable Text & Numbers */}
           <div className="relative z-10 select-text pointer-events-auto">
@@ -735,6 +853,7 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
           </div>
         </div>
       </div>
+    )}
 
       {/* Floating Stylus Toolbar (when in Pen Mode) */}
       {isPenMode && (

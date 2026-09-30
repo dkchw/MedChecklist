@@ -115,6 +115,7 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({
   const [renamedFolderName, setRenamedFolderName] = useState('');
   const [activeHandwritingTarget, setActiveHandwritingTarget] = useState<'content' | 'title' | null>(null);
   const [editingColorFolderId, setEditingColorFolderId] = useState<string | null>(null);
+  const [isMobileFolderOpen, setIsMobileFolderOpen] = useState(false);
 
   // High-performance folder adjacency graph (O(1) child lookups)
   const folderHierarchy = useMemo(() => {
@@ -1256,7 +1257,7 @@ Write your clinical guideline, patient review, or bedside study notes here.
   // =========================================================================
   if (!selectedNote) {
     return (
-      <div className="w-full flex-1 flex flex-col min-h-0 h-full p-2 sm:p-4 bg-slate-50/50 dark:bg-slate-950/50 select-none">
+      <div className="w-full flex-1 flex flex-col min-h-full p-2 sm:p-4 bg-slate-50/50 dark:bg-slate-950/50 select-none">
         {/* Hidden File Input for Markdown Import */}
         <input
           type="file"
@@ -1330,10 +1331,26 @@ Write your clinical guideline, patient review, or bedside study notes here.
           </div>
         </div>
 
+        {/* Mobile Folder Toggle Bar */}
+        <div className="md:hidden flex items-center justify-between p-2.5 mb-2 bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setIsMobileFolderOpen(!isMobileFolderOpen)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-900 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-slate-700 shadow-2xs cursor-pointer"
+          >
+            <Folder className="w-3.5 h-3.5" />
+            <span>Folder: {activeFolderName}</span>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isMobileFolderOpen ? 'rotate-180' : ''}`} />
+          </button>
+          <span className="text-xs text-slate-500 font-mono">
+            {filteredAndSortedNotes.length} {filteredAndSortedNotes.length === 1 ? 'file' : 'files'}
+          </span>
+        </div>
+
         {/* Main Dual-Panel Explorer Layout */}
-        <div className="flex-1 flex flex-col md:flex-row min-h-0 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-sm md:overflow-hidden">
           {/* Left Panel: Folders & Smart Filters Sidebar */}
-          <div className="w-full md:w-64 lg:w-72 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 p-3 flex flex-col bg-slate-50/40 dark:bg-slate-900/40 shrink-0 min-h-0">
+          <div className={`w-full md:w-64 lg:w-72 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 p-3 flex flex-col bg-slate-50/40 dark:bg-slate-900/40 shrink-0 ${isMobileFolderOpen ? 'flex' : 'hidden md:flex'}`}>
             {/* Quick Search */}
             <div className="relative mb-3">
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
@@ -1366,6 +1383,7 @@ Write your clinical guideline, patient review, or bedside study notes here.
                 onClick={() => {
                   setSelectedFolderFilter('all');
                   setSelectedTagFilter(null);
+                  setIsMobileFolderOpen(false);
                 }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                   selectedFolderFilter === 'all' && !selectedTagFilter
@@ -1393,6 +1411,7 @@ Write your clinical guideline, patient review, or bedside study notes here.
                 onClick={() => {
                   setSelectedFolderFilter('pinned');
                   setSelectedTagFilter(null);
+                  setIsMobileFolderOpen(false);
                 }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                   selectedFolderFilter === 'pinned'
@@ -1420,6 +1439,7 @@ Write your clinical guideline, patient review, or bedside study notes here.
                 onClick={() => {
                   setSelectedFolderFilter('unfiled');
                   setSelectedTagFilter(null);
+                  setIsMobileFolderOpen(false);
                 }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                   selectedFolderFilter === 'unfiled'
@@ -1591,6 +1611,7 @@ Write your clinical guideline, patient review, or bedside study notes here.
                           onClick={() => {
                             setSelectedFolderFilter(f.id);
                             setSelectedTagFilter(null);
+                            setIsMobileFolderOpen(false);
                           }}
                           className={`group w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                             isSelected
@@ -1897,7 +1918,7 @@ Write your clinical guideline, patient review, or bedside study notes here.
             </div>
 
             {/* Notes Explorer Canvas */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+            <div className="flex-1 md:overflow-y-auto p-4 sm:p-6">
               {filteredAndSortedNotes.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-8">
                   <div className="w-16 h-16 rounded-3xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 flex items-center justify-center mb-4">
@@ -2199,7 +2220,7 @@ Write your clinical guideline, patient review, or bedside study notes here.
   // (Rendered when a note is active)
   // =========================================================================
   return (
-    <div className="w-full flex-1 flex flex-col min-h-0 h-full p-2 sm:p-4 bg-slate-50/40 dark:bg-slate-950/40">
+    <div className="w-full flex-1 flex flex-col min-h-[calc(100vh-80px)] p-2 sm:p-4 bg-slate-50/40 dark:bg-slate-950/40">
       {/* Note Workspace Main Container */}
       <div className="flex-1 flex min-h-0 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-xs overflow-hidden">
         {/* Optional Collapsible Sidebar Drawer inside Reader for Fast Switching */}

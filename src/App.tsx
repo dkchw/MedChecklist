@@ -548,7 +548,7 @@ export function App() {
         onToggleTheme={handleToggleTheme}
       />
 
-      <main className={`flex-1 flex flex-col min-h-0 w-full max-w-full overflow-x-hidden ${activeTab.type === 'knowledge' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+      <main className="flex-1 flex flex-col min-h-0 w-full max-w-full overflow-x-hidden overflow-y-auto">
         {activeTab.type === 'encounters' && (
           <PatientEncounterView
             encounters={encounters}

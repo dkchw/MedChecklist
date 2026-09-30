@@ -3,13 +3,26 @@ import getStroke from 'perfect-freehand';
 import { HandwritingOcrService, OcrResult } from '../../utils/handwritingOcr';
 import { InkStroke, StrokePoint } from '../../types/ink';
 import { isPointNearStroke, getAdaptiveInkColor } from '../../utils/inkUtils';
-import { Pen, Check, RotateCcw, X, Sparkles, ArrowRightLeft, Delete, Keyboard, Touchpad } from 'lucide-react';
+import {
+  Pen,
+  Eraser,
+  Check,
+  RotateCcw,
+  X,
+  Sparkles,
+  ArrowRightLeft,
+  Delete,
+  Keyboard,
+  Move,
+  GripHorizontal,
+} from 'lucide-react';
 import {
   SUPPORTED_KEYBOARDS,
   KeyboardLanguageConfig,
   getEnabledKeyboards,
   getKeyboardRows,
 } from '../../utils/keyboardLanguages';
+import { savePendingInkItem } from '../../utils/pendingInk';
 
 interface HandwritingInputBoxProps {
   label?: string;
@@ -32,6 +45,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const bufferCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const activePointsRef = useRef<StrokePoint[]>([]);
   const isDrawingRef = useRef(false);
   const rafIdRef = useRef<number | null>(null);
@@ -41,13 +55,24 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
   const [recognizedText, setRecognizedText] = useState<string>(value || '');
   const baseTextRef = useRef<string>(value || '');
 
+  const [boxTool, setBoxTool] = useState<'pen' | 'eraser'>('pen');
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [showVirtualKeyboard, setShowVirtualKeyboard] = useState<boolean>(false);
   const [enabledKeyboards, setEnabledKeyboards] = useState<string[]>(['en', 'vi', 'med_symbols']);
   const [activeKeyboardId, setActiveKeyboardId] = useState<string>('en');
   const [isShiftActive, setIsShiftActive] = useState<boolean>(false);
 
-  // User requirement 1: Pen Only mode (reject touch, only recognize pen)
+  // Movable / Draggable canvas state
+  const [modalPos, setModalPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef<{ startX: number; startY: number; origX: number; origY: number }>({
+    startX: 0,
+    startY: 0,
+    origX: 0,
+    origY: 0,
+  });
+
+  // Pen Only mode (reject touch, only recognize pen)
   const [penOnlyMode, setPenOnlyMode] = useState<boolean>(() => {
     try {
       return localStorage.getItem('medchecklist_pen_only') === 'true';
@@ -56,7 +81,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
     }
   });
 
-  // User requirement 5: Append mode toggle
+  // Append mode toggle
   const [appendMode, setAppendMode] = useState<boolean>(() => {
     try {
       return localStorage.getItem('medchecklist_ocr_append') === 'true';
@@ -64,6 +89,13 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
       return false;
     }
   });
+
+  // Auto-scroll input to the latest text so clinician doesn't have to scroll
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.scrollLeft = inputRef.current.scrollWidth;
+    }
+  }, [recognizedText]);
 
   useEffect(() => {
     getEnabledKeyboards().then((ids) => {
@@ -178,11 +210,11 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
 
     // Draw active stroke on top without React state overhead
     const activePts = activePointsRef.current;
-    if (activePts.length > 0) {
+    if (activePts.length > 0 && boxTool !== 'eraser') {
       const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
       drawStroke(ctx, activePts, isDark ? '#f8fafc' : '#0f172a', 3.5);
     }
-  }, []);
+  }, [boxTool]);
 
   const scheduleRender = useCallback(() => {
     if (rafIdRef.current !== null) return;
@@ -209,17 +241,23 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
     renderCanvas();
   }, [strokes, updateBackgroundBuffer, renderCanvas]);
 
-  // Stylus button detection (barrel button / side eraser)
+  // Stylus button detection (barrel button / side eraser / eraser pointerType)
   const isPenEraserActive = (e: React.PointerEvent<HTMLCanvasElement> | PointerEvent): boolean => {
     return (
-      e.pointerType === 'pen' &&
-      ((e.buttons & 2) !== 0 || (e.buttons & 32) !== 0 || e.button === 2 || e.button === 5)
+      boxTool === 'eraser' ||
+      e.pointerType === 'eraser' ||
+      ((e.buttons & 2) !== 0 ||
+        (e.buttons & 4) !== 0 ||
+        (e.buttons & 32) !== 0 ||
+        e.button === 2 ||
+        e.button === 5 ||
+        (e as any).altKey)
     );
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    // User requirement 1: Pen Only mode - reject finger touches
-    if (penOnlyMode && e.pointerType !== 'pen') {
+    // User requirement: Pen Only mode - reject finger touches (allow eraser device)
+    if (penOnlyMode && (e.pointerType as string) !== 'pen' && (e.pointerType as string) !== 'eraser') {
       return;
     }
 
@@ -240,14 +278,18 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
     const y = e.clientY - rect.top;
     const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
 
-    // User requirement 3: Stylus button eraser
+    // Stylus button or tool eraser
     if (isPenEraserActive(e)) {
       activePointsRef.current = [];
       const remaining = strokes.filter((s) => !isPointNearStroke({ x, y }, s, 25));
       if (remaining.length !== strokes.length) {
         setStrokes(remaining);
+        // User requirement: link stroke erase to OCR text directly
         if (remaining.length > 0) {
           runOcr(remaining);
+        } else {
+          setRecognizedText(appendMode && baseTextRef.current ? baseTextRef.current : '');
+          setOcrResult(null);
         }
       }
       scheduleRender();
@@ -259,7 +301,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (penOnlyMode && e.pointerType !== 'pen') return;
+    if (penOnlyMode && (e.pointerType as string) !== 'pen' && (e.pointerType as string) !== 'eraser') return;
     if (!isDrawingRef.current) return;
     if (e.cancelable) {
       e.preventDefault();
@@ -283,8 +325,12 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
         const remaining = strokes.filter((s) => !isPointNearStroke({ x, y }, s, 25));
         if (remaining.length !== strokes.length) {
           setStrokes(remaining);
+          // Link stroke erase to OCR text directly
           if (remaining.length > 0) {
             runOcr(remaining);
+          } else {
+            setRecognizedText(appendMode && baseTextRef.current ? baseTextRef.current : '');
+            setOcrResult(null);
           }
         }
         scheduleRender();
@@ -297,7 +343,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (penOnlyMode && e.pointerType !== 'pen') return;
+    if (penOnlyMode && (e.pointerType as string) !== 'pen' && (e.pointerType as string) !== 'eraser') return;
     if (!isDrawingRef.current) return;
     isDrawingRef.current = false;
 
@@ -355,7 +401,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
     }
   };
 
-  // User requirement 4: Clean writing zone should NOT clean entire text box!
+  // Clean writing zone should NOT clean entire text box
   const handleClearCanvas = () => {
     setStrokes([]);
     activePointsRef.current = [];
@@ -365,10 +411,15 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
     renderCanvas();
   };
 
-  // User requirement 2: Delete entire line
+  // Delete entire line
   const handleClearLine = () => {
     setRecognizedText('');
     baseTextRef.current = '';
+    setStrokes([]);
+    activePointsRef.current = [];
+    setOcrResult(null);
+    updateBackgroundBuffer();
+    renderCanvas();
   };
 
   // Delete single character backspace
@@ -425,16 +476,72 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
     onClose();
   };
 
+  // User requirement: Save handwriting directly if OCR keeps failing or doctor is in a rush
+  const handleSaveInkDirectly = async () => {
+    if (strokes.length === 0) return;
+    const inkId = 'ink-' + Date.now();
+    await savePendingInkItem({
+      id: inkId,
+      fieldLabel: label || 'Clinical Field',
+      strokes: [...strokes],
+      timestamp: Date.now(),
+    });
+    const inkPlaceholder = `✍️ [Ink: ${label || 'Note'}]`;
+    onAccept(inkPlaceholder);
+    onClose();
+  };
+
+  // Dragging handlers for movable modal
+  const handleDragStart = (e: React.PointerEvent) => {
+    isDraggingRef.current = true;
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: modalPos.x,
+      origY: modalPos.y,
+    };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleDragMove = (e: React.PointerEvent) => {
+    if (!isDraggingRef.current) return;
+    const dx = e.clientX - dragStartRef.current.startX;
+    const dy = e.clientY - dragStartRef.current.startY;
+    setModalPos({
+      x: dragStartRef.current.origX + dx,
+      y: dragStartRef.current.origY + dy,
+    });
+  };
+
+  const handleDragEnd = (e: React.PointerEvent) => {
+    isDraggingRef.current = false;
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+  };
+
   const canConvert =
     ['°C', '°F', 'mg/dL', 'mmol/L'].includes(selectedUnit) && !isNaN(parseFloat(recognizedText));
 
   return (
-    <div className="bg-white dark:bg-slate-900 border-2 border-indigo-500 rounded-2xl shadow-2xl p-3.5 z-40 transition-all space-y-2.5 animate-in fade-in duration-100 max-w-lg w-full">
-      {/* Box Header */}
+    <div
+      style={{
+        transform: `translate(${modalPos.x}px, ${modalPos.y}px)`,
+      }}
+      className="bg-white dark:bg-slate-900 border-2 border-indigo-500 rounded-2xl shadow-2xl p-3.5 z-40 transition-shadow space-y-2.5 animate-in fade-in duration-100 max-w-lg w-full"
+    >
+      {/* Box Header - Draggable & Functional */}
       <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-100 flex-wrap gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <Pen className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-          <span className="truncate font-bold">Stylus: {label || 'Vitals / Field'}</span>
+        {/* Draggable Title Bar */}
+        <div
+          onPointerDown={handleDragStart}
+          onPointerMove={handleDragMove}
+          onPointerUp={handleDragEnd}
+          className="flex items-center gap-1.5 min-w-0 cursor-move touch-none select-none p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          title="Drag to reposition input canvas anywhere on screen"
+        >
+          <GripHorizontal className="w-4 h-4 text-indigo-500 shrink-0" />
+          <span className="truncate font-bold text-xs sm:text-sm">Stylus: {label || 'Vitals / Field'}</span>
           {isNumericOnly && (
             <span className="text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.2 rounded border border-indigo-200 dark:border-indigo-800 shrink-0">
               Vitals OCR
@@ -443,7 +550,37 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-          {/* User requirement 1: Turn off handwriting/finger touch, only recognize pen */}
+          {/* Tool Switcher: Pen vs Eraser */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setBoxTool('pen')}
+              className={`px-1.5 py-0.5 rounded text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                boxTool === 'pen'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="Pen drawing tool"
+            >
+              <Pen className="w-3 h-3" />
+              <span>Pen</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setBoxTool('eraser')}
+              className={`px-1.5 py-0.5 rounded text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                boxTool === 'eraser'
+                  ? 'bg-amber-600 text-white shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="Eraser tool (or use stylus barrel button)"
+            >
+              <Eraser className="w-3 h-3" />
+              <span>Eraser</span>
+            </button>
+          </div>
+
+          {/* Pen Only mode */}
           <button
             type="button"
             onClick={() => {
@@ -464,7 +601,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
             <span>{penOnlyMode ? 'Pen Only' : 'Touch+Pen'}</span>
           </button>
 
-          {/* User requirement 5: Option to append the textbox instead of replacing */}
+          {/* Append mode toggle */}
           <button
             type="button"
             onClick={() => {
@@ -511,9 +648,9 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
         </div>
       </div>
 
-      {/* Multilingual Virtual Keyboard Panel (Standard Keyboard Layout) */}
+      {/* Multilingual Virtual Keyboard Panel (Compact & Fits Without Scrolling) */}
       {showVirtualKeyboard && (
-        <div className="p-2.5 rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-slate-50 dark:bg-slate-800/80 space-y-2 animate-in fade-in duration-100">
+        <div className="p-2 rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-slate-50 dark:bg-slate-800/80 space-y-1.5 animate-in fade-in duration-100">
           {/* Language Selector Tabs */}
           <div className="flex items-center gap-1 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-700 text-xs">
             {SUPPORTED_KEYBOARDS.filter((kb) => enabledKeyboards.includes(kb.id)).map((kb) => (
@@ -521,7 +658,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
                 key={kb.id}
                 type="button"
                 onClick={() => setActiveKeyboardId(kb.id)}
-                className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 shrink-0 cursor-pointer transition-colors ${
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-bold flex items-center gap-1 shrink-0 cursor-pointer transition-colors ${
                   activeKeyboardId === kb.id
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'bg-white dark:bg-slate-700/60 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600'
@@ -533,17 +670,17 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
             ))}
           </div>
 
-          {/* Standard Keyboard Grid (Multi-row QWERTY format) */}
+          {/* Standard Compact Keyboard Grid (Non-scrolling layout) */}
           {(() => {
             const currentKb =
               SUPPORTED_KEYBOARDS.find((kb) => kb.id === activeKeyboardId) || SUPPORTED_KEYBOARDS[0];
             const rows = getKeyboardRows(currentKb);
 
             return (
-              <div className="space-y-1.5">
-                <div className="p-1 bg-white/80 dark:bg-slate-900/80 rounded-lg border border-slate-200/80 dark:border-slate-800 max-h-48 overflow-y-auto space-y-1">
+              <div className="space-y-1">
+                <div className="p-1 bg-white/80 dark:bg-slate-900/80 rounded-lg border border-slate-200/80 dark:border-slate-800 space-y-0.5">
                   {rows.map((row, rIdx) => (
-                    <div key={rIdx} className="flex justify-center items-center gap-1 flex-nowrap">
+                    <div key={rIdx} className="flex justify-center items-center gap-0.5 flex-nowrap w-full">
                       {row.map((k, kIdx) => {
                         const displayChar = isShiftActive && k.length === 1 ? k.toUpperCase() : k;
                         return (
@@ -558,7 +695,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
                                 return next;
                               });
                             }}
-                            className="min-w-6 sm:min-w-7 h-7 sm:h-8 px-1.5 rounded-lg bg-slate-100 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-indigo-900/60 text-slate-800 dark:text-slate-100 font-semibold text-xs flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-2xs active:scale-95 cursor-pointer transition-all"
+                            className="flex-1 min-w-0 h-6 sm:h-7 px-0.5 rounded bg-slate-100 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-indigo-900/60 text-slate-800 dark:text-slate-100 font-semibold text-[11px] sm:text-xs flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-2xs active:scale-95 cursor-pointer transition-all"
                           >
                             {displayChar}
                           </button>
@@ -568,18 +705,18 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
                   ))}
 
                   {/* Standard Bottom Function Row: Shift, Space, Backspace, Clear */}
-                  <div className="flex justify-center items-center gap-1 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                  <div className="flex justify-center items-center gap-1 pt-0.5 border-t border-slate-200/60 dark:border-slate-700/60">
                     <button
                       type="button"
                       onClick={() => setIsShiftActive(!isShiftActive)}
-                      className={`h-7 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center transition-colors border shadow-2xs ${
+                      className={`h-6 sm:h-7 px-2 rounded text-[11px] font-bold flex items-center justify-center transition-colors border shadow-2xs ${
                         isShiftActive
                           ? 'bg-indigo-600 text-white border-indigo-600'
                           : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
                       }`}
                       title="Shift / Uppercase"
                     >
-                      ⇧ Shift
+                      ⇧
                     </button>
 
                     <button
@@ -591,7 +728,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
                           return next;
                         });
                       }}
-                      className="flex-1 h-7 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-xs flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-2xs cursor-pointer"
+                      className="flex-1 h-6 sm:h-7 px-2 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-xs flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-2xs cursor-pointer"
                       title="Spacebar"
                     >
                       Space
@@ -600,21 +737,21 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
                     <button
                       type="button"
                       onClick={handleBackspace}
-                      className="h-7 px-2.5 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-200 font-bold text-xs flex items-center gap-1 border border-amber-300 dark:border-amber-700 shadow-2xs cursor-pointer"
+                      className="h-6 sm:h-7 px-2 rounded bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-200 font-bold text-xs flex items-center gap-0.5 border border-amber-300 dark:border-amber-700 shadow-2xs cursor-pointer"
                       title="Backspace"
                     >
-                      <Delete className="w-3.5 h-3.5" />
+                      <Delete className="w-3 h-3" />
                       <span>⌫</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={handleClearLine}
-                      className="h-7 px-2.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 font-bold text-xs flex items-center gap-1 border border-red-300 dark:border-red-700 shadow-2xs cursor-pointer"
+                      className="h-6 sm:h-7 px-2 rounded bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 font-bold text-xs flex items-center gap-0.5 border border-red-300 dark:border-red-700 shadow-2xs cursor-pointer"
                       title="Delete entire line"
                     >
-                      <X className="w-3.5 h-3.5" />
-                      <span>✕ Line</span>
+                      <X className="w-3 h-3" />
+                      <span>✕</span>
                     </button>
                   </div>
                 </div>
@@ -622,9 +759,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
                 {/* Clinical Shortcuts for Active Language */}
                 {currentKb.clinicalShortcuts && currentKb.clinicalShortcuts.length > 0 && (
                   <div className="flex items-center gap-1 overflow-x-auto text-[10px] py-0.5">
-                    <span className="font-bold text-slate-600 dark:text-slate-300 uppercase shrink-0">
-                      Shortcuts:
-                    </span>
+                    <span className="font-bold text-slate-500 uppercase shrink-0">Shortcuts:</span>
                     {currentKb.clinicalShortcuts.map((sc) => (
                       <button
                         key={sc}
@@ -636,7 +771,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
                             return next;
                           });
                         }}
-                        className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 shrink-0 cursor-pointer transition-colors"
+                        className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 shrink-0 cursor-pointer transition-colors text-[10px]"
                       >
                         {sc}
                       </button>
@@ -739,7 +874,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
           <span>⌫</span>
         </button>
 
-        {/* User requirement 2: Delete All Line */}
+        {/* Delete All Line */}
         <button
           type="button"
           onClick={handleClearLine}
@@ -767,19 +902,21 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
         </button>
       </div>
 
-      {/* Real-time OCR Recognition Status Bar with Backspace & Delete All Line Controls */}
+      {/* Real-time OCR Recognition Status Bar - Bigger Textbox That Auto-Follows Latest Text */}
       <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-200 dark:border-slate-800 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
-          <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          {/* User requirement: Bigger textbox that follows latest text without manual scroll */}
           <input
+            ref={inputRef}
             type="text"
             value={recognizedText}
             onChange={(e) => {
               setRecognizedText(e.target.value);
               baseTextRef.current = e.target.value;
             }}
-            placeholder="Recognized text..."
-            className="font-mono text-xs font-bold px-2 py-1 rounded-lg border border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-950 dark:text-indigo-100 outline-none w-28 sm:w-36 focus:ring-1 focus:ring-indigo-500"
+            placeholder="Recognized clinical text..."
+            className="font-mono text-sm font-bold px-2.5 py-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-950 dark:text-indigo-100 outline-none flex-1 min-w-[150px] focus:ring-2 focus:ring-indigo-500 shadow-inner"
           />
           {selectedUnit !== 'None' && (
             <span className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
@@ -791,41 +928,53 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
           <button
             type="button"
             onClick={handleBackspace}
-            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-amber-300 dark:border-amber-700 shrink-0"
+            className="p-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-amber-300 dark:border-amber-700 shrink-0"
             title="Backspace (delete previous character)"
           >
             <Delete className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
             <span className="text-[11px]">⌫</span>
           </button>
 
-          {/* User requirement 2: Delete entire line button next to backspace */}
+          {/* Delete entire line button next to backspace */}
           <button
             type="button"
             onClick={handleClearLine}
-            className="px-2 py-1 bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-red-300 dark:border-red-700 shrink-0"
+            className="p-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-red-300 dark:border-red-700 shrink-0"
             title="Clear entire text line"
           >
             <X className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-            <span className="text-[11px]">✕ Line</span>
+            <span className="text-[11px]">✕</span>
           </button>
 
           {/* Manual OCR button */}
           <button
             type="button"
             onClick={() => runOcr(strokes)}
-            className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold transition-colors border border-indigo-200 dark:border-indigo-800 shrink-0"
+            className="px-2 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold transition-colors border border-indigo-200 dark:border-indigo-800 shrink-0"
             title="Re-run OCR recognition on current handwriting"
           >
             OCR
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          {/* User requirement 4: Clean writing zone should NOT clean entire text box */}
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+          {/* User requirement: Save handwriting directly if OCR fails or doctor needs fast input */}
+          <button
+            type="button"
+            onClick={handleSaveInkDirectly}
+            disabled={strokes.length === 0}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
+            title="Save raw handwriting directly without OCR and remind to transcribe later"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Save Ink</span>
+          </button>
+
+          {/* Clean writing zone should NOT clean entire text box */}
           <button
             type="button"
             onClick={handleClearCanvas}
-            className="flex items-center gap-1 px-2 py-1.5 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-xs font-medium transition-colors border border-slate-200 dark:border-slate-700"
+            className="flex items-center gap-1 px-2 py-1.5 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-xs font-medium transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
             title="Clear Scratchpad Only (preserves recognized text box)"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -836,7 +985,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
             type="button"
             onClick={handleAcceptOcr}
             disabled={!recognizedText.trim()}
-            className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold disabled:opacity-40 transition-colors shadow-xs"
+            className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold disabled:opacity-40 transition-colors shadow-xs cursor-pointer"
           >
             <Check className="w-3.5 h-3.5" />
             <span>Apply</span>
