@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import getStroke from 'perfect-freehand';
 import { HandwritingOcrService, OcrResult } from '../../utils/handwritingOcr';
 import { InkStroke, StrokePoint } from '../../types/ink';
@@ -24,8 +24,12 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
   onClose,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const bufferCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const activePointsRef = useRef<StrokePoint[]>([]);
+  const isDrawingRef = useRef(false);
+  const rafIdRef = useRef<number | null>(null);
+
   const [strokes, setStrokes] = useState<InkStroke[]>([]);
-  const [currentStroke, setCurrentStroke] = useState<StrokePoint[] | null>(null);
   const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
   const [recognizedText, setRecognizedText] = useState<string>(value || '');
   const [isRecognizing, setIsRecognizing] = useState(false);
@@ -43,56 +47,6 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
   };
 
   const [selectedUnit, setSelectedUnit] = useState<string>(getInitialUnit);
-
-  // Resize canvas to parent container with high-DPI scaling
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(rect.width * dpr);
-    canvas.height = Math.round(rect.height * dpr);
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.scale(dpr, dpr);
-    }
-    renderCanvas();
-  }, []);
-
-  const renderCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.scale(dpr, dpr);
-
-    const w = canvas.width / dpr;
-    const h = canvas.height / dpr;
-
-    // Draw guideline baseline
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(10, h * 0.75);
-    ctx.lineTo(w - 10, h * 0.75);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Draw saved strokes
-    for (const stroke of strokes) {
-      drawStroke(ctx, stroke.points, stroke.color, stroke.size);
-    }
-
-    // Draw active stroke
-    if (currentStroke && currentStroke.length > 0) {
-      drawStroke(ctx, currentStroke, '#0f172a', 3.5);
-    }
-  };
 
   const drawStroke = (
     ctx: CanvasRenderingContext2D,
@@ -122,52 +76,151 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
     ctx.fill();
   };
 
+  // Pre-render guideline and saved strokes to offscreen buffer
+  const updateBackgroundBuffer = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (!bufferCanvasRef.current) {
+      bufferCanvasRef.current = document.createElement('canvas');
+    }
+    const buffer = bufferCanvasRef.current;
+    const dpr = window.devicePixelRatio || 1;
+
+    if (buffer.width !== canvas.width || buffer.height !== canvas.height) {
+      buffer.width = canvas.width;
+      buffer.height = canvas.height;
+    }
+
+    const bCtx = buffer.getContext('2d');
+    if (!bCtx) return;
+
+    bCtx.setTransform(1, 0, 0, 1, 0, 0);
+    bCtx.clearRect(0, 0, buffer.width, buffer.height);
+    bCtx.scale(dpr, dpr);
+
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+
+    // Draw guideline baseline
+    bCtx.strokeStyle = '#94a3b8';
+    bCtx.lineWidth = 1;
+    bCtx.setLineDash([4, 4]);
+    bCtx.beginPath();
+    bCtx.moveTo(10, h * 0.75);
+    bCtx.lineTo(w - 10, h * 0.75);
+    bCtx.stroke();
+    bCtx.setLineDash([]);
+
+    // Draw saved strokes
+    for (const stroke of strokes) {
+      drawStroke(bCtx, stroke.points, stroke.color, stroke.size);
+    }
+  }, [strokes]);
+
+  // Fast single-blit display render
+  const renderCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const buffer = bufferCanvasRef.current;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (buffer) {
+      ctx.drawImage(buffer, 0, 0);
+    }
+
+    const dpr = window.devicePixelRatio || 1;
+    ctx.scale(dpr, dpr);
+
+    // Draw active stroke on top without React state overhead
+    const activePts = activePointsRef.current;
+    if (activePts.length > 0) {
+      drawStroke(ctx, activePts, '#0f172a', 3.5);
+    }
+  }, []);
+
+  const scheduleRender = useCallback(() => {
+    if (rafIdRef.current !== null) return;
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      renderCanvas();
+    });
+  }, [renderCanvas]);
+
+  // Resize canvas to parent container with high-DPI scaling
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    updateBackgroundBuffer();
+    renderCanvas();
+  }, [updateBackgroundBuffer, renderCanvas]);
+
+  useEffect(() => {
+    updateBackgroundBuffer();
+    renderCanvas();
+  }, [strokes, updateBackgroundBuffer, renderCanvas]);
+
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     canvas.setPointerCapture(e.pointerId);
+    isDrawingRef.current = true;
 
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
 
-    setCurrentStroke([{ x, y, pressure }]);
+    activePointsRef.current = [{ x, y, pressure }];
+    scheduleRender();
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!currentStroke) return;
+    if (!isDrawingRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
+    const coalescedEvents = (e.nativeEvent as any).getCoalescedEvents
+      ? (e.nativeEvent as any).getCoalescedEvents()
+      : [e];
 
-    const updated = [...currentStroke, { x, y, pressure }];
-    setCurrentStroke(updated);
-
-    renderCanvas();
+    for (const ev of coalescedEvents) {
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      const pressure = ev.pressure && ev.pressure > 0 ? ev.pressure : 0.5;
+      activePointsRef.current.push({ x, y, pressure });
+    }
+    scheduleRender();
   };
 
   const handlePointerUp = () => {
-    if (!currentStroke) return;
-    const newStroke: InkStroke = {
-      id: 'stroke-' + Date.now(),
-      points: currentStroke,
-      color: '#0f172a',
-      size: 3.5,
-      tool: 'pen',
-      timestamp: Date.now(),
-    };
+    if (!isDrawingRef.current) return;
+    isDrawingRef.current = false;
 
-    const newStrokes = [...strokes, newStroke];
-    setStrokes(newStrokes);
-    setCurrentStroke(null);
+    if (activePointsRef.current.length > 0) {
+      const newStroke: InkStroke = {
+        id: 'stroke-' + Date.now(),
+        points: [...activePointsRef.current],
+        color: '#0f172a',
+        size: 3.5,
+        tool: 'pen',
+        timestamp: Date.now(),
+      };
 
-    // Run OCR
-    runOcr(newStrokes);
+      activePointsRef.current = [];
+      const newStrokes = [...strokes, newStroke];
+      setStrokes(newStrokes);
+      runOcr(newStrokes);
+    }
   };
 
   const runOcr = (currentStrokes: InkStroke[]) => {
@@ -182,14 +235,11 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
 
   const handleClear = () => {
     setStrokes([]);
-    setCurrentStroke(null);
+    activePointsRef.current = [];
     setOcrResult(null);
     setRecognizedText('');
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
+    updateBackgroundBuffer();
+    renderCanvas();
   };
 
   // Unit Converter handler
@@ -306,7 +356,7 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
           className="w-full h-full block"
         />
 
-        {strokes.length === 0 && !currentStroke && (
+        {strokes.length === 0 && (
           <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-xs text-slate-400 dark:text-slate-400 italic select-none">
             {placeholder || 'Write digits with stylus (e.g. 120/80)...'}
           </div>

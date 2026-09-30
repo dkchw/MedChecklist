@@ -167,15 +167,30 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
     setZoom(1);
   };
 
-  // Toggle item checked
+  // Toggle item checked (Optimized immutable update)
   const handleToggleItem = (checklistIdx: number, sectionIdx: number, itemIdx: number) => {
-    const updated = JSON.parse(JSON.stringify(encounter)) as PatientEncounter;
-    const item = updated.checklists[checklistIdx].sections[sectionIdx].items[itemIdx];
-    item.checked = !item.checked;
-    updated.updatedAt = Date.now();
-    onUpdateEncounter(updated);
+    let shouldConfetti = false;
+    const updatedChecklists = encounter.checklists.map((chk, cIdx) => {
+      if (cIdx !== checklistIdx) return chk;
+      return {
+        ...chk,
+        sections: chk.sections.map((sec, sIdx) => {
+          if (sIdx !== sectionIdx) return sec;
+          return {
+            ...sec,
+            items: sec.items.map((itm, iIdx) => {
+              if (iIdx !== itemIdx) return itm;
+              const nextChecked = !itm.checked;
+              if (nextChecked && itm.starred) shouldConfetti = true;
+              return { ...itm, checked: nextChecked };
+            }),
+          };
+        }),
+      };
+    });
+    onUpdateEncounter({ ...encounter, checklists: updatedChecklists, updatedAt: Date.now() });
 
-    if (item.checked && item.starred) {
+    if (shouldConfetti) {
       confetti({
         particleCount: 20,
         spread: 40,
@@ -187,14 +202,27 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
   // Quick add missing symptom on the fly
   const handleAddQuickItem = () => {
     if (!quickItemText.trim() || encounter.checklists.length === 0) return;
-    const updated = JSON.parse(JSON.stringify(encounter)) as PatientEncounter;
-    updated.checklists[0].sections[0].items.push({
-      id: 'quick-' + Date.now(),
-      text: quickItemText.trim(),
-      checked: true,
+    const updatedChecklists = encounter.checklists.map((chk, idx) => {
+      if (idx !== 0) return chk;
+      return {
+        ...chk,
+        sections: chk.sections.map((sec, sIdx) => {
+          if (sIdx !== 0) return sec;
+          return {
+            ...sec,
+            items: [
+              ...sec.items,
+              {
+                id: 'quick-' + Date.now(),
+                text: quickItemText.trim(),
+                checked: true,
+              },
+            ],
+          };
+        }),
+      };
     });
-    updated.updatedAt = Date.now();
-    onUpdateEncounter(updated);
+    onUpdateEncounter({ ...encounter, checklists: updatedChecklists, updatedAt: Date.now() });
     setQuickItemText('');
     setShowAddQuickItem(false);
   };

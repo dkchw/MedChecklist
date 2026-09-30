@@ -38,14 +38,19 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
   penOnlyMode = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [currentStroke, setCurrentStroke] = useState<StrokePoint[] | null>(null);
+  const bufferCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rafIdRef = useRef<number | null>(null);
+
+  // Active in-progress stroke points kept in ref for 0-lag 120 FPS rendering without React re-renders
+  const activePointsRef = useRef<StrokePoint[]>([]);
   const isDrawingRef = useRef(false);
 
   // Irregular Freehand Lasso Selector state
-  const [lassoPath, setLassoPath] = useState<StrokePoint[] | null>(null);
+  const activeLassoRef = useRef<StrokePoint[]>([]);
   const [selectedStrokeIds, setSelectedStrokeIds] = useState<string[]>([]);
-  const [isDraggingSelection, setIsDraggingSelection] = useState(false);
-  const dragStartPos = useRef<{ x: number; y: number } | null>(null);
+  const isDraggingSelectionRef = useRef(false);
+  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const dragDeltaRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
 
   // Filter strokes belonging to current page
   const pageStrokes = strokes.filter((s) => (s.pageIndex ?? 0) === pageIndex);
@@ -73,76 +78,135 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
 
   const selectedBounds = getSelectedBounds();
 
-  // Redraw all strokes on canvas with High-DPI scaling
-  const redrawAll = useCallback(() => {
+  // Convert client pointer coordinates to canvas virtual coordinate space
+  const getCanvasCoords = useCallback(
+    (clientX: number, clientY: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return { x: 0, y: 0 };
+      const rect = canvas.getBoundingClientRect();
+      const rawX = clientX - rect.left;
+      const rawY = clientY - rect.top;
+      return {
+        x: (rawX - panX) / zoom,
+        y: (rawY - panY) / zoom,
+      };
+    },
+    [panX, panY, zoom]
+  );
+
+  // 1. Render all committed strokes to the background buffer canvas
+  const updateBackgroundBuffer = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (!bufferCanvasRef.current) {
+      bufferCanvasRef.current = document.createElement('canvas');
+    }
+    const buffer = bufferCanvasRef.current;
+    const dpr = window.devicePixelRatio || 1;
+
+    if (buffer.width !== canvas.width || buffer.height !== canvas.height) {
+      buffer.width = canvas.width;
+      buffer.height = canvas.height;
+    }
+
+    const bCtx = buffer.getContext('2d');
+    if (!bCtx) return;
+
+    bCtx.setTransform(1, 0, 0, 1, 0, 0);
+    bCtx.clearRect(0, 0, buffer.width, buffer.height);
+
+    bCtx.save();
+    bCtx.scale(dpr, dpr);
+    bCtx.translate(panX, panY);
+    bCtx.scale(zoom, zoom);
+
+    for (const stroke of pageStrokes) {
+      drawStrokeOnCanvas(bCtx, stroke);
+    }
+    bCtx.restore();
+  }, [pageStrokes, panX, panY, zoom]);
+
+  // 2. Fast single-frame blit + active overlay render
+  const renderDisplay = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const dpr = window.devicePixelRatio || 1;
+    const buffer = bufferCanvasRef.current;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Blit pre-rendered background buffer in 1 hardware-accelerated drawImage call
+    if (buffer) {
+      ctx.drawImage(buffer, 0, 0);
+    }
+
+    const dpr = window.devicePixelRatio || 1;
     ctx.save();
     ctx.scale(dpr, dpr);
     ctx.translate(panX, panY);
     ctx.scale(zoom, zoom);
 
-    // Draw saved page strokes
-    for (const stroke of pageStrokes) {
-      drawStrokeOnCanvas(ctx, stroke);
+    // If currently dragging selected strokes, render their preview with delta
+    if (isDraggingSelectionRef.current && (dragDeltaRef.current.dx !== 0 || dragDeltaRef.current.dy !== 0)) {
+      const { dx, dy } = dragDeltaRef.current;
+      for (const s of pageStrokes) {
+        if (selectedStrokeIds.includes(s.id)) {
+          const previewStroke: InkStroke = {
+            ...s,
+            points: s.points.map((p) => ({ x: p.x + dx, y: p.y + dy, pressure: p.pressure })),
+          };
+          drawStrokeOnCanvas(ctx, previewStroke);
+        }
+      }
     }
 
-    // Draw active stroke currently being drawn
-    if (currentStroke && currentStroke.length > 0 && tool !== 'eraser' && tool !== 'selector') {
+    // Render active stroke currently being drawn with sub-millisecond vector pathing
+    const pts = activePointsRef.current;
+    if (pts.length > 0 && tool !== 'eraser' && tool !== 'selector') {
       const activeStrokeObj: InkStroke = {
         id: 'active',
-        points: currentStroke,
+        points: pts,
         color,
         size,
         tool,
         pageIndex,
-        timestamp: Date.now(),
+        timestamp: 0,
       };
       drawStrokeOnCanvas(ctx, activeStrokeObj);
     }
 
-    // Draw freehand irregular lasso path
-    if (lassoPath && lassoPath.length > 1) {
+    // Render active freehand lasso path
+    const lasso = activeLassoRef.current;
+    if (lasso.length > 1) {
       ctx.strokeStyle = '#6366f1';
       ctx.lineWidth = 2 / zoom;
       ctx.setLineDash([6 / zoom, 4 / zoom]);
       ctx.beginPath();
-      ctx.moveTo(lassoPath[0].x, lassoPath[0].y);
-      for (let i = 1; i < lassoPath.length; i++) {
-        ctx.lineTo(lassoPath[i].x, lassoPath[i].y);
+      ctx.moveTo(lasso[0].x, lasso[0].y);
+      for (let i = 1; i < lasso.length; i++) {
+        ctx.lineTo(lasso[i].x, lasso[i].y);
       }
       ctx.stroke();
 
-      // Translucent lasso fill
       ctx.fillStyle = 'rgba(99, 102, 241, 0.08)';
       ctx.closePath();
       ctx.fill();
       ctx.setLineDash([]);
     }
 
-    // Highlight selected strokes with tight dashed marquee box
+    // Render selection dashed marquee box
     if (selectedBounds && tool === 'selector') {
       ctx.strokeStyle = '#4f46e5';
       ctx.lineWidth = 2 / zoom;
       ctx.setLineDash([6 / zoom, 4 / zoom]);
       const pad = 8 / zoom;
+      const { dx, dy } = dragDeltaRef.current;
       ctx.strokeRect(
-        selectedBounds.minX - pad,
-        selectedBounds.minY - pad,
-        selectedBounds.maxX - selectedBounds.minX + pad * 2,
-        selectedBounds.maxY - selectedBounds.minY + pad * 2
-      );
-      ctx.fillStyle = 'rgba(79, 70, 229, 0.05)';
-      ctx.fillRect(
-        selectedBounds.minX - pad,
-        selectedBounds.minY - pad,
+        selectedBounds.minX + dx - pad,
+        selectedBounds.minY + dy - pad,
         selectedBounds.maxX - selectedBounds.minX + pad * 2,
         selectedBounds.maxY - selectedBounds.minY + pad * 2
       );
@@ -150,55 +214,57 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     }
 
     ctx.restore();
-  }, [pageStrokes, currentStroke, tool, color, size, panX, panY, zoom, lassoPath, selectedBounds, pageIndex]);
+  }, [color, pageIndex, pageStrokes, panX, panY, selectedBounds, selectedStrokeIds, size, tool, zoom]);
 
-  // Handle canvas sizing with High-DPI support
+  // Request display frame on next animation frame
+  const scheduleRender = useCallback(() => {
+    if (rafIdRef.current !== null) return;
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      renderDisplay();
+    });
+  }, [renderDisplay]);
+
+  // Setup HiDPI Canvas Dimensions
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const updateCanvasSize = () => {
-      const parent = canvas.parentElement;
-      if (!parent) return;
-      const rect = parent.getBoundingClientRect();
+    const updateDimensions = () => {
+      const rect = canvas.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
+      const newWidth = Math.round(rect.width * dpr);
+      const newHeight = Math.round(rect.height * dpr);
 
-      const targetW = Math.round(rect.width * dpr);
-      const targetH = Math.round(rect.height * dpr);
+      if (canvas.width !== newWidth || canvas.height !== newHeight) {
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+      }
+      updateBackgroundBuffer();
+      renderDisplay();
+    };
 
-      if (canvas.width !== targetW || canvas.height !== targetH) {
-        canvas.width = targetW;
-        canvas.height = targetH;
-        canvas.style.width = `${rect.width}px`;
-        canvas.style.height = `${rect.height}px`;
-        redrawAll();
+    updateDimensions();
+    const observer = new ResizeObserver(updateDimensions);
+    observer.observe(canvas);
+
+    return () => {
+      observer.disconnect();
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
       }
     };
+  }, [updateBackgroundBuffer, renderDisplay]);
 
-    updateCanvasSize();
-    window.addEventListener('resize', updateCanvasSize);
-    return () => window.removeEventListener('resize', updateCanvasSize);
-  }, [redrawAll]);
-
+  // Update background buffer whenever committed strokes or viewport transform changes
   useEffect(() => {
-    redrawAll();
-  }, [redrawAll]);
+    updateBackgroundBuffer();
+    renderDisplay();
+  }, [updateBackgroundBuffer, renderDisplay]);
 
-  // Convert screen coordinates to canvas space (accounting for pan, zoom, and device pixel ratio)
-  const getCanvasCoords = (clientX: number, clientY: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    const rawX = clientX - rect.left;
-    const rawY = clientY - rect.top;
-    return {
-      x: (rawX - panX) / zoom,
-      y: (rawY - panY) / zoom,
-    };
-  };
-
+  // Pointer Down
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    // Stylus / Palm Rejection Guard:
+    // Palm Rejection Guard
     if (penOnlyMode && e.pointerType !== 'pen') {
       e.preventDefault();
       return;
@@ -221,7 +287,6 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
         onChangeStrokes(remaining);
       }
     } else if (tool === 'selector') {
-      // Check if clicking inside current selected bounding box to start dragging
       if (
         selectedBounds &&
         x >= selectedBounds.minX - 12 &&
@@ -229,101 +294,114 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
         y >= selectedBounds.minY - 12 &&
         y <= selectedBounds.maxY + 12
       ) {
-        setIsDraggingSelection(true);
-        dragStartPos.current = { x, y };
+        isDraggingSelectionRef.current = true;
+        dragStartPosRef.current = { x, y };
+        dragDeltaRef.current = { dx: 0, dy: 0 };
       } else {
-        // Start new freehand irregular lasso
         setSelectedStrokeIds([]);
-        setLassoPath([{ x, y, pressure }]);
+        activeLassoRef.current = [{ x, y, pressure }];
+        scheduleRender();
       }
     } else {
-      setCurrentStroke([{ x, y, pressure }]);
+      activePointsRef.current = [{ x, y, pressure }];
+      scheduleRender();
     }
   };
 
+  // Pointer Move (Zero-Lag with Coalesced Events & RAF Scheduling)
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (penOnlyMode && e.pointerType !== 'pen') {
-      return;
-    }
-
+    if (penOnlyMode && e.pointerType !== 'pen') return;
     if (!isDrawingRef.current) return;
-    const { x, y } = getCanvasCoords(e.clientX, e.clientY);
-    const pressure = e.pressure && e.pressure > 0 ? Math.max(0.12, Math.min(1.0, e.pressure)) : 0.5;
 
-    if (tool === 'eraser') {
-      const remaining = strokes.filter(
-        (s) => (s.pageIndex ?? 0) !== pageIndex || !isPointNearStroke({ x, y }, s, size * 2.5)
-      );
-      if (remaining.length !== strokes.length) {
-        onChangeStrokes(remaining);
+    // Use coalesced events to capture full digitizer sample rate without latency
+    const coalescedEvents = (e.nativeEvent as any).getCoalescedEvents
+      ? (e.nativeEvent as any).getCoalescedEvents()
+      : [e];
+
+    for (const ev of coalescedEvents) {
+      const { x, y } = getCanvasCoords(ev.clientX, ev.clientY);
+      const pressure = ev.pressure && ev.pressure > 0 ? Math.max(0.12, Math.min(1.0, ev.pressure)) : 0.5;
+
+      if (tool === 'eraser') {
+        const remaining = strokes.filter(
+          (s) => (s.pageIndex ?? 0) !== pageIndex || !isPointNearStroke({ x, y }, s, size * 2.5)
+        );
+        if (remaining.length !== strokes.length) {
+          onChangeStrokes(remaining);
+        }
+      } else if (tool === 'selector') {
+        if (isDraggingSelectionRef.current && dragStartPosRef.current) {
+          dragDeltaRef.current = {
+            dx: x - dragStartPosRef.current.x,
+            dy: y - dragStartPosRef.current.y,
+          };
+          scheduleRender();
+        } else if (activeLassoRef.current.length > 0) {
+          activeLassoRef.current.push({ x, y, pressure });
+          scheduleRender();
+        }
+      } else {
+        activePointsRef.current.push({ x, y, pressure });
+        scheduleRender();
       }
-    } else if (tool === 'selector') {
-      if (isDraggingSelection && dragStartPos.current) {
-        const dx = x - dragStartPos.current.x;
-        const dy = y - dragStartPos.current.y;
-
-        // Move all selected strokes by delta
-        const updated = strokes.map((s) => {
-          if (selectedStrokeIds.includes(s.id) && (s.pageIndex ?? 0) === pageIndex) {
-            return {
-              ...s,
-              points: s.points.map((p) => ({
-                ...p,
-                x: p.x + dx,
-                y: p.y + dy,
-              })),
-            };
-          }
-          return s;
-        });
-
-        dragStartPos.current = { x, y };
-        onChangeStrokes(updated);
-      } else if (lassoPath) {
-        // Continue drawing irregular lasso boundary
-        setLassoPath((prev) => (prev ? [...prev, { x, y, pressure }] : [{ x, y, pressure }]));
-      }
-    } else if (currentStroke) {
-      setCurrentStroke((prev) => (prev ? [...prev, { x, y, pressure }] : [{ x, y, pressure }]));
     }
   };
 
+  // Pointer Up (Commit Stroke Once)
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (penOnlyMode && e.pointerType !== 'pen') {
-      return;
-    }
-
+    if (penOnlyMode && e.pointerType !== 'pen') return;
     isDrawingRef.current = false;
 
     if (tool === 'selector') {
-      if (isDraggingSelection) {
-        setIsDraggingSelection(false);
-        dragStartPos.current = null;
-      } else if (lassoPath && lassoPath.length > 2) {
-        // Point-in-polygon freehand irregular lasso detection
+      if (isDraggingSelectionRef.current) {
+        const { dx, dy } = dragDeltaRef.current;
+        if (dx !== 0 || dy !== 0) {
+          const updated = strokes.map((s) => {
+            if (selectedStrokeIds.includes(s.id) && (s.pageIndex ?? 0) === pageIndex) {
+              return {
+                ...s,
+                points: s.points.map((p) => ({
+                  ...p,
+                  x: p.x + dx,
+                  y: p.y + dy,
+                })),
+              };
+            }
+            return s;
+          });
+          onChangeStrokes(updated);
+        }
+        isDraggingSelectionRef.current = false;
+        dragStartPosRef.current = null;
+        dragDeltaRef.current = { dx: 0, dy: 0 };
+        scheduleRender();
+      } else if (activeLassoRef.current.length > 2) {
+        const lasso = activeLassoRef.current;
         const selectedIds: string[] = [];
         for (const s of pageStrokes) {
-          if (isStrokeInPolygon(s, lassoPath)) {
+          if (isStrokeInPolygon(s, lasso)) {
             selectedIds.push(s.id);
           }
         }
         setSelectedStrokeIds(selectedIds);
-        setLassoPath(null);
+        activeLassoRef.current = [];
+        scheduleRender();
       } else {
-        setLassoPath(null);
+        activeLassoRef.current = [];
+        scheduleRender();
       }
-    } else if (currentStroke && currentStroke.length > 0) {
+    } else if (activePointsRef.current.length > 0) {
       const newStroke: InkStroke = {
         id: 'stroke-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
-        points: currentStroke,
+        points: [...activePointsRef.current],
         color,
         size,
         tool,
         pageIndex,
         timestamp: Date.now(),
       };
+      activePointsRef.current = [];
       onChangeStrokes([...strokes, newStroke]);
-      setCurrentStroke(null);
     }
   };
 
@@ -361,9 +439,11 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
         onPointerUp={handlePointerUp}
         onPointerCancel={() => {
           isDrawingRef.current = false;
-          setCurrentStroke(null);
-          setLassoPath(null);
-          setIsDraggingSelection(false);
+          activePointsRef.current = [];
+          activeLassoRef.current = [];
+          isDraggingSelectionRef.current = false;
+          dragDeltaRef.current = { dx: 0, dy: 0 };
+          scheduleRender();
         }}
         className="w-full h-full block cursor-crosshair touch-none"
       />
@@ -379,39 +459,34 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
           }}
           className="z-30 bg-slate-900/90 text-white backdrop-blur-md rounded-xl shadow-xl px-2 py-1.5 flex items-center gap-1.5 border border-slate-700 text-xs animate-in fade-in"
         >
-          <span className="text-[10px] text-slate-300 font-semibold px-1">
-            {selectedStrokeIds.length} ink strokes
+          <span className="text-[10px] text-slate-400 font-mono px-1">
+            {selectedStrokeIds.length} selected
           </span>
 
-          <div className="h-4 w-px bg-slate-700" />
-
           <button
-            type="button"
             onClick={handleDuplicateSelected}
-            className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition-colors font-medium text-[11px]"
+            className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-200 hover:text-white flex items-center gap-1 transition-colors"
             title="Duplicate Selected Strokes"
           >
-            <Copy className="w-3 h-3 text-indigo-400" />
-            <span>Duplicate</span>
+            <Copy className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="text-[11px]">Duplicate</span>
           </button>
 
           <button
-            type="button"
             onClick={handleDeleteSelected}
-            className="flex items-center gap-1 px-2 py-1 bg-red-950/80 hover:bg-red-900 text-red-300 hover:text-white rounded-lg transition-colors font-medium text-[11px]"
+            className="p-1.5 hover:bg-red-950/80 rounded-lg text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors"
             title="Delete Selected Strokes"
           >
-            <Trash2 className="w-3 h-3" />
-            <span>Delete</span>
+            <Trash2 className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Delete</span>
           </button>
 
           <button
-            type="button"
             onClick={() => setSelectedStrokeIds([])}
-            className="p-1 text-slate-400 hover:text-white rounded-lg transition-colors"
+            className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white ml-1 transition-colors"
             title="Deselect"
           >
-            <X className="w-3 h-3" />
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}

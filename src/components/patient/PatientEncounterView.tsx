@@ -37,10 +37,14 @@ import {
   Pen,
   FileDown,
   HelpCircle,
+  ShieldCheck,
+  EyeOff,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AttachModal } from '../common/AttachModal';
 import { ClinicalRecallModal } from '../common/ClinicalRecallModal';
+import { ImageEditorModal } from '../common/ImageEditorModal';
+import { AnonymizeShareModal } from './AnonymizeShareModal';
 import { PenCanvas } from '../pen/PenCanvas';
 import { HandwritingOcrService } from '../../utils/handwritingOcr';
 import { PenTool as PenToolType } from '../../types/ink';
@@ -126,6 +130,8 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
     itemIdx?: number;
   } | null>(null);
   const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null);
+  const [showAnonymizeModal, setShowAnonymizeModal] = useState<boolean>(false);
+  const [editingImage, setEditingImage] = useState<MedicalImage | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [copiedDefault, setCopiedDefault] = useState<boolean>(false);
   const [activeNoteItemId, setActiveNoteItemId] = useState<string | null>(null);
@@ -254,27 +260,53 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
     });
   };
 
-  // Checklist Item Interactions
+  // Checklist Item Interactions (Optimized immutable updates without deep cloning overhead)
   const handleToggleItem = (checklistIdx: number, sectionIdx: number, itemIdx: number) => {
     if (!currentEncounter) return;
-    const updated = JSON.parse(JSON.stringify(currentEncounter)) as PatientEncounter;
-    const item = updated.checklists[checklistIdx].sections[sectionIdx].items[itemIdx];
-    item.checked = !item.checked;
-    updated.updatedAt = Date.now();
-    onUpdateEncounter(updated);
+    let shouldConfetti = false;
+    const updatedChecklists = currentEncounter.checklists.map((chk, cIdx) => {
+      if (cIdx !== checklistIdx) return chk;
+      return {
+        ...chk,
+        sections: chk.sections.map((sec, sIdx) => {
+          if (sIdx !== sectionIdx) return sec;
+          return {
+            ...sec,
+            items: sec.items.map((itm, iIdx) => {
+              if (iIdx !== itemIdx) return itm;
+              const nextChecked = !itm.checked;
+              if (nextChecked && itm.starred) shouldConfetti = true;
+              return { ...itm, checked: nextChecked };
+            }),
+          };
+        }),
+      };
+    });
+    onUpdateEncounter({ ...currentEncounter, checklists: updatedChecklists, updatedAt: Date.now() });
 
-    if (item.checked && item.starred) {
+    if (shouldConfetti) {
       confetti({ particleCount: 25, spread: 50, origin: { y: 0.8 } });
     }
   };
 
   const handleToggleStar = (checklistIdx: number, sectionIdx: number, itemIdx: number) => {
     if (!currentEncounter) return;
-    const updated = JSON.parse(JSON.stringify(currentEncounter)) as PatientEncounter;
-    const item = updated.checklists[checklistIdx].sections[sectionIdx].items[itemIdx];
-    item.starred = !item.starred;
-    updated.updatedAt = Date.now();
-    onUpdateEncounter(updated);
+    const updatedChecklists = currentEncounter.checklists.map((chk, cIdx) => {
+      if (cIdx !== checklistIdx) return chk;
+      return {
+        ...chk,
+        sections: chk.sections.map((sec, sIdx) => {
+          if (sIdx !== sectionIdx) return sec;
+          return {
+            ...sec,
+            items: sec.items.map((itm, iIdx) =>
+              iIdx === itemIdx ? { ...itm, starred: !itm.starred } : itm
+            ),
+          };
+        }),
+      };
+    });
+    onUpdateEncounter({ ...currentEncounter, checklists: updatedChecklists, updatedAt: Date.now() });
   };
 
   const handleUpdateItemNote = (
@@ -284,10 +316,22 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
     note: string
   ) => {
     if (!currentEncounter) return;
-    const updated = JSON.parse(JSON.stringify(currentEncounter)) as PatientEncounter;
-    updated.checklists[checklistIdx].sections[sectionIdx].items[itemIdx].note = note;
-    updated.updatedAt = Date.now();
-    onUpdateEncounter(updated);
+    const updatedChecklists = currentEncounter.checklists.map((chk, cIdx) => {
+      if (cIdx !== checklistIdx) return chk;
+      return {
+        ...chk,
+        sections: chk.sections.map((sec, sIdx) => {
+          if (sIdx !== sectionIdx) return sec;
+          return {
+            ...sec,
+            items: sec.items.map((itm, iIdx) =>
+              iIdx === itemIdx ? { ...itm, note } : itm
+            ),
+          };
+        }),
+      };
+    });
+    onUpdateEncounter({ ...currentEncounter, checklists: updatedChecklists, updatedAt: Date.now() });
   };
 
   const handleUpdateItemLabValue = (
@@ -297,18 +341,40 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
     labValue: string
   ) => {
     if (!currentEncounter) return;
-    const updated = JSON.parse(JSON.stringify(currentEncounter)) as PatientEncounter;
-    updated.checklists[checklistIdx].sections[sectionIdx].items[itemIdx].labValue = labValue;
-    updated.updatedAt = Date.now();
-    onUpdateEncounter(updated);
+    const updatedChecklists = currentEncounter.checklists.map((chk, cIdx) => {
+      if (cIdx !== checklistIdx) return chk;
+      return {
+        ...chk,
+        sections: chk.sections.map((sec, sIdx) => {
+          if (sIdx !== sectionIdx) return sec;
+          return {
+            ...sec,
+            items: sec.items.map((itm, iIdx) =>
+              iIdx === itemIdx ? { ...itm, labValue } : itm
+            ),
+          };
+        }),
+      };
+    });
+    onUpdateEncounter({ ...currentEncounter, checklists: updatedChecklists, updatedAt: Date.now() });
   };
 
   const handleDeleteItem = (checklistIdx: number, sectionIdx: number, itemIdx: number) => {
     if (!currentEncounter) return;
-    const updated = JSON.parse(JSON.stringify(currentEncounter)) as PatientEncounter;
-    updated.checklists[checklistIdx].sections[sectionIdx].items.splice(itemIdx, 1);
-    updated.updatedAt = Date.now();
-    onUpdateEncounter(updated);
+    const updatedChecklists = currentEncounter.checklists.map((chk, cIdx) => {
+      if (cIdx !== checklistIdx) return chk;
+      return {
+        ...chk,
+        sections: chk.sections.map((sec, sIdx) => {
+          if (sIdx !== sectionIdx) return sec;
+          return {
+            ...sec,
+            items: sec.items.filter((_, iIdx) => iIdx !== itemIdx),
+          };
+        }),
+      };
+    });
+    onUpdateEncounter({ ...currentEncounter, checklists: updatedChecklists, updatedAt: Date.now() });
   };
 
   const handleAttachTemplate = (tpl: ChecklistTemplate) => {
@@ -347,6 +413,56 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
     }
     updated.updatedAt = Date.now();
     onUpdateEncounter(updated);
+  };
+
+  const handleSaveEncounterEditedImage = (editedDataUrl: string, asNewCopy: boolean) => {
+    if (!currentEncounter || !editingImage) return;
+
+    const updated = JSON.parse(JSON.stringify(currentEncounter)) as PatientEncounter;
+
+    if (asNewCopy) {
+      const newImg: MedicalImage = {
+        id: 'img-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+        url: editedDataUrl,
+        caption: `[De-identified] ${editingImage.caption || 'Clinical Snapshot'}`,
+        tags: Array.from(new Set([...(editingImage.tags || []), 'anonymized'])),
+        timestamp: Date.now(),
+      };
+      updated.images = [...(updated.images || []), newImg];
+    } else {
+      let found = false;
+      if (updated.images) {
+        for (const img of updated.images) {
+          if (img.id === editingImage.id) {
+            img.url = editedDataUrl;
+            img.tags = Array.from(new Set([...(img.tags || []), 'anonymized']));
+            found = true;
+            break;
+          }
+        }
+      }
+      if (!found) {
+        for (const chk of updated.checklists || []) {
+          for (const sec of chk.sections || []) {
+            for (const itm of sec.items || []) {
+              for (const img of itm.images || []) {
+                if (img.id === editingImage.id) {
+                  img.url = editedDataUrl;
+                  img.tags = Array.from(new Set([...(img.tags || []), 'anonymized']));
+                  found = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    updated.updatedAt = Date.now();
+    onUpdateEncounter(updated);
+    setEditingImage(null);
+    setActiveLightboxImage(null);
   };
 
   const handleAttachLink = (lnk: MedicalLink) => {
@@ -962,6 +1078,16 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
               >
                 <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 <span>LLM Sync</span>
+              </button>
+
+              {/* Anonymize & Share Button */}
+              <button
+                onClick={() => setShowAnonymizeModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold transition-colors border border-emerald-200 dark:border-emerald-800"
+                title="De-identify and export anonymized case summary for medical sharing"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Anonymize & Share</span>
               </button>
 
               {/* Export Default Viewer Mode (Clean text, numbers, omitting full scratch drawings) */}
@@ -1676,6 +1802,34 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
               alt="Enlarged snapshot"
               className="max-h-[85vh] max-w-full rounded-xl shadow-2xl object-contain"
             />
+            <div className="absolute bottom-3 right-3 flex items-center gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const allImgs: MedicalImage[] = [
+                    ...(currentEncounter.images || []),
+                    ...currentEncounter.checklists.flatMap((c) =>
+                      c.sections.flatMap((s) => s.items.flatMap((i) => i.images || []))
+                    ),
+                  ];
+                  const found = allImgs.find((im) => im.url === activeLightboxImage);
+                  setEditingImage(
+                    found || {
+                      id: 'img-' + Date.now(),
+                      url: activeLightboxImage,
+                      caption: 'Clinical Snapshot',
+                      tags: [],
+                      timestamp: Date.now(),
+                    }
+                  );
+                }}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg transition-colors"
+                title="Open Image Redaction & De-identification Editor"
+              >
+                <EyeOff className="w-3.5 h-3.5" />
+                <span>Edit & Redact Image</span>
+              </button>
+            </div>
             <button
               onClick={() => setActiveLightboxImage(null)}
               className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-black text-white rounded-full"
@@ -1698,6 +1852,24 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
           personalNotes={activeRecall.personalNotes}
           onSavePersonalNotes={activeRecall.onSaveNotes}
           onClose={() => setActiveRecall(null)}
+        />
+      )}
+
+      {/* Anonymize & Share Modal */}
+      {showAnonymizeModal && currentEncounter && (
+        <AnonymizeShareModal
+          encounter={currentEncounter}
+          onClose={() => setShowAnonymizeModal(false)}
+        />
+      )}
+
+      {/* Image Redaction & Editor Modal */}
+      {editingImage && (
+        <ImageEditorModal
+          imageUrl={editingImage.url}
+          imageCaption={editingImage.caption}
+          onSave={handleSaveEncounterEditedImage}
+          onClose={() => setEditingImage(null)}
         />
       )}
     </div>
