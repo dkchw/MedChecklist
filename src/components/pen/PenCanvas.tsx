@@ -271,12 +271,18 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
       }
     };
 
+    const preventContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
     canvas.addEventListener('touchstart', preventTouchScroll, { passive: false });
     canvas.addEventListener('touchmove', preventTouchScroll, { passive: false });
+    canvas.addEventListener('contextmenu', preventContextMenu);
 
     return () => {
       canvas.removeEventListener('touchstart', preventTouchScroll);
       canvas.removeEventListener('touchmove', preventTouchScroll);
+      canvas.removeEventListener('contextmenu', preventContextMenu);
     };
   }, []);
 
@@ -516,14 +522,32 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     setSelectedStrokeIds(duplicated.map((d) => d.id));
   };
 
+  const wrapperClass = className.includes('absolute')
+    ? `w-full h-full select-none touch-none ${className}`
+    : `relative w-full h-full select-none touch-none ${className}`;
+
   return (
-    <div className={`relative w-full h-full select-none touch-none ${className}`}>
+    <div className={wrapperClass} style={{ touchAction: 'none' }}>
       <canvas
         ref={canvasRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onContextMenu={(e) => e.preventDefault()}
         onPointerCancel={() => {
+          // Commit in-flight stroke if valid to prevent gesture cancellation data loss on Android
+          if (isDrawingRef.current && activePointsRef.current.length > 1 && tool !== 'eraser' && tool !== 'selector') {
+            const newStroke: InkStroke = {
+              id: 'stroke-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+              points: [...activePointsRef.current],
+              color,
+              size,
+              tool,
+              pageIndex,
+              timestamp: Date.now(),
+            };
+            onChangeStrokes([...strokes, newStroke]);
+          }
           isDrawingRef.current = false;
           activePointsRef.current = [];
           activeLassoRef.current = [];
@@ -532,6 +556,7 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
           scheduleRender();
         }}
         className="w-full h-full block cursor-crosshair touch-none"
+        style={{ touchAction: 'none' }}
       />
 
       {/* Floating Action Menu for Selected Strokes */}

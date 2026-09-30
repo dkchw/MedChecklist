@@ -17,6 +17,7 @@ import {
   Image as ImageIcon,
   Settings,
   Pen,
+  Home,
 } from 'lucide-react';
 import appLogo from '../../../assets/app-icon.png';
 import { ThemeMode } from '../../utils/theme';
@@ -28,6 +29,7 @@ interface HeaderProps {
   activeTabId: string;
   onSelectTab: (tabId: string) => void;
   onOpenSidebar: () => void;
+  onGoHome?: () => void;
   onOpenFolders: () => void;
   onOpenSearch: () => void;
   onOpenSync: () => void;
@@ -46,6 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
   tabs,
   activeTabId,
   onOpenSidebar,
+  onGoHome,
   onOpenFolders,
   onOpenSearch,
   onOpenSync,
@@ -83,18 +86,28 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-semantic-card/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-3 sm:px-5 py-2 flex items-center justify-between transition-colors gap-3 flex-nowrap">
       {/* Brand & Sidebar Trigger */}
-      <div className="flex items-center gap-3 flex-nowrap shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap shrink-0">
+        {/* Workspace Menu Drawer Toggle */}
         <button
           type="button"
           onClick={onOpenSidebar}
-          className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-all cursor-pointer group border border-transparent hover:border-slate-200/80 dark:hover:border-slate-700"
+          className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/80 text-indigo-600 dark:text-indigo-400 transition-all cursor-pointer border border-transparent hover:border-slate-200/80 dark:hover:border-slate-700"
           title="Open Workspace Menu (or swipe right from left edge)"
         >
-          <Menu className="w-5 h-5 text-indigo-500 group-hover:scale-110 transition-transform shrink-0" />
+          <Menu className="w-5 h-5 shrink-0" />
+        </button>
+
+        {/* User requirement 7: Clicking app icon / logo navigates directly to Home */}
+        <button
+          type="button"
+          onClick={onGoHome || onOpenSidebar}
+          className="flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-all cursor-pointer group"
+          title="Return to Home (Patient Rounds)"
+        >
           <img
             src={appLogo}
             alt="MedChecklist Logo"
-            className="w-7 h-7 rounded-lg object-contain shadow-xs border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0"
+            className="w-7 h-7 rounded-lg object-contain shadow-xs border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 group-hover:scale-105 transition-transform"
           />
           <div className="text-left hidden sm:block">
             <div className="text-xs sm:text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
@@ -107,8 +120,21 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
       </div>
 
-      {/* Active Workspace / Mode Indicator (Prominent & Big) + Quick Inking Trigger */}
-      <div className="flex items-center gap-2 min-w-0">
+      {/* Active Workspace / Mode Indicator (Prominent & Big) + Dedicated Home Button + Quick Inking Trigger */}
+      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        {/* Dedicated Home Button */}
+        {onGoHome && (
+          <button
+            type="button"
+            onClick={onGoHome}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs sm:text-sm shadow-xs cursor-pointer transition-all hover:scale-105 active:scale-95 border border-slate-200/80 dark:border-slate-700 shrink-0"
+            title="Go to Home Workspace (Patient Rounds)"
+          >
+            <Home className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 dark:text-indigo-400" />
+            <span className="hidden md:inline">Home</span>
+          </button>
+        )}
+
         <button
           type="button"
           onClick={onOpenSidebar}

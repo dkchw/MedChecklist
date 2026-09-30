@@ -457,13 +457,45 @@ export function App() {
     return Array.from(new Set([...fromFolders, ...fromEncounters, ...DEFAULT_WARDS]));
   }, [folders, encounters]);
 
-  const handleOpenInkingMode = () => {
+  const handleGoHome = () => {
+    setActiveTabId('tab-encounters');
+    setIsBedsideMode(false);
+    setIsSidebarOpen(false);
+    setShowFolderModal(false);
+    setShowSearchModal(false);
+    setShowSyncModal(false);
+    setShowSettingsModal(false);
+    setShowVaultModal(false);
+    setShowGalleryModal(false);
+    setShowNewPatientModal(false);
+    setEditingChecklist(null);
+    setEditingClinicalTemplate(null);
+    setLlmTarget(null);
+  };
+
+  const handleOpenInkingMode = async () => {
     if (!selectedEncounterId && encounters.length > 0) {
       const active = encounters.find((e) => !e.isDeleted && (e.status || 'active') === 'active') || encounters[0];
       setSelectedEncounterId(active.id);
     } else if (encounters.length === 0) {
-      setShowNewPatientModal(true);
-      return;
+      // Auto-create blank rounds sheet so inking opens immediately
+      const walkIn: PatientEncounter = {
+        id: 'enc-' + crypto.randomUUID(),
+        patientIdentifier: 'Bedside Rounds Sheet',
+        status: 'active',
+        facility: DEFAULT_FACILITIES[0] || 'General Hospital',
+        group: 'Ward A',
+        chiefComplaint: 'Bedside Notes & Annotations',
+        tags: ['rounds', 'walk-in'],
+        checklists: [],
+        inkStrokes: [],
+        pagesCount: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      await db.encounters.put(walkIn);
+      await refreshData();
+      setSelectedEncounterId(walkIn.id);
     }
     setIsBedsideMode(true);
   };
@@ -479,6 +511,7 @@ export function App() {
         activeTabId={activeTabId}
         onSelectTab={setActiveTabId}
         onOpenSidebar={() => setIsSidebarOpen(true)}
+        onGoHome={handleGoHome}
         onOpenFolders={() => setShowFolderModal(true)}
         onOpenSearch={() => setShowSearchModal(true)}
         onOpenSync={() => setShowSyncModal(true)}

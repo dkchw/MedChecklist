@@ -26,6 +26,7 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  Home,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -368,13 +369,23 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col relative select-none transition-colors">
       {/* Top Clinical Bedside Navigation Bar */}
       <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-2.5 flex items-center justify-between shadow-xs gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={onExit}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
+            title="Return to Home (Patient Dossier)"
+          >
+            <Home className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <span>Home</span>
+          </button>
+
+          <button
+            onClick={onExit}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+            title="Exit Bedside Mode"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Exit Bedside</span>
+            <span className="hidden sm:inline">Exit</span>
           </button>
 
           <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
@@ -530,14 +541,23 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
       {/* Main Dual-Layer Document Area */}
       <div
         ref={documentContainerRef}
-        className="flex-1 relative overflow-auto p-4 sm:p-8 flex items-start justify-center"
+        className={`flex-1 relative p-4 sm:p-8 flex items-start justify-center ${
+          isPenMode ? 'overflow-hidden touch-none select-none' : 'overflow-auto'
+        }`}
+        style={{
+          touchAction: isPenMode ? 'none' : 'auto',
+          overscrollBehavior: 'none',
+        }}
       >
         {/* Paper-Like Document Sheet */}
         <div
-          className="relative bg-white dark:bg-slate-900 shadow-2xl rounded-2xl border border-slate-200/90 dark:border-slate-800 w-full max-w-4xl min-h-[900px] p-8 sm:p-12 transition-transform duration-75 select-text"
+          className={`relative bg-white dark:bg-slate-900 shadow-2xl rounded-2xl border border-slate-200/90 dark:border-slate-800 w-full max-w-4xl min-h-[900px] p-8 sm:p-12 transition-transform duration-75 ${
+            isPenMode ? 'touch-none select-none' : 'select-text'
+          }`}
           style={{
             transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
             transformOrigin: 'top center',
+            touchAction: isPenMode ? 'none' : 'auto',
           }}
         >
           {/* Transparent Stylus Inking Overlay */}
