@@ -208,6 +208,29 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
   const [copiedDefault, setCopiedDefault] = useState<boolean>(false);
   const [activeNoteItemId, setActiveNoteItemId] = useState<string | null>(null);
 
+  // Patient Detail Sub-Tabs
+  const [detailTab, setDetailTab] = useState<'summary' | 'checklists' | 'notes' | 'files'>('summary');
+
+  // Collapsible checklist sections
+  const [expandedChecklists, setExpandedChecklists] = useState<Set<string>>(new Set());
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+
+  const toggleChecklist = (id: string) => {
+    setExpandedChecklists(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSection = (id: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   // Extract unique facilities (Hospitals / Clinics) from folders, encounters, and defaults
   const availableFacilities = React.useMemo(() => {
     return Array.from(
@@ -786,6 +809,36 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
         </div>
       </div>
 
+      {/* Patient Detail Sub-Tabs */}
+      <div className="flex items-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-1 shadow-xs">
+        {([
+          { key: 'summary' as const, label: 'Summary', icon: <User className="w-3.5 h-3.5" /> },
+          { key: 'checklists' as const, label: 'Checklists', icon: <CheckSquare className="w-3.5 h-3.5" /> },
+          { key: 'notes' as const, label: 'Notes', icon: <MessageSquare className="w-3.5 h-3.5" /> },
+          { key: 'files' as const, label: 'Files', icon: <ImageIcon className="w-3.5 h-3.5" /> },
+        ]).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setDetailTab(tab.key)}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              detailTab === tab.key
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+            {tab.key === 'checklists' && currentEncounter.checklists.length > 0 && (
+              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+                detailTab === 'checklists' ? 'bg-indigo-700/80 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+              }`}>{currentEncounter.checklists.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Summary Tab — Patient Profile + Checklists + Notes combined in grid */}
+      {detailTab === 'summary' && (
       <div className="lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
           {/* Left Column: Patient Profile & Protocol Navigator */}
           <div className="lg:col-span-4 xl:col-span-4 space-y-4 mb-6 lg:mb-0">
@@ -1980,6 +2033,190 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
           </div>
         </div>
       </div>
+      )}
+
+      {/* Checklists Tab — Focused checklist view with collapsible sections */}
+      {detailTab === 'checklists' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <CheckSquare className="w-4 h-4 text-emerald-500" />
+              Active Checklists ({currentEncounter.checklists.length})
+            </h2>
+          </div>
+
+          {currentEncounter.checklists.length === 0 ? (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-8 text-center">
+              <CheckSquare className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+              <p className="text-sm text-slate-500 dark:text-slate-400">No checklists added yet</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Go to Protocols to add checklists</p>
+            </div>
+          ) : (
+            currentEncounter.checklists.map((inst, cIdx) => {
+              const isExpanded = expandedChecklists.has(inst.id);
+              const totalItems = inst.sections.reduce((sum, s) => sum + s.items.length, 0);
+              const checkedItems = inst.sections.reduce((sum, s) => sum + s.items.filter(i => i.checked).length, 0);
+              const progress = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
+
+              return (
+                <div key={inst.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs overflow-hidden">
+                  <button
+                    onClick={() => toggleChecklist(inst.id)}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform shrink-0 ${isExpanded ? '' : '-rotate-90'}`} />
+                      <span className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{inst.title}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[11px] font-mono text-slate-500">{checkedItems}/{totalItems}</span>
+                      <div className="w-16 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                      </div>
+                    </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="border-t border-slate-100 dark:border-slate-800">
+                      {inst.sections.map((sec, sIdx) => {
+                        const secKey = `${inst.id}-${sec.id}`;
+                        const secExpanded = expandedSections.has(secKey);
+                        const secChecked = sec.items.filter(i => i.checked).length;
+
+                        return (
+                          <div key={sec.id}>
+                            <button
+                              onClick={() => toggleSection(secKey)}
+                              className="w-full flex items-center justify-between px-5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer border-b border-slate-100/50 dark:border-slate-800/50"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${secExpanded ? '' : '-rotate-90'}`} />
+                                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">{sec.title}</span>
+                              </div>
+                              <span className="text-[10px] font-mono text-slate-400">{secChecked}/{sec.items.length}</span>
+                            </button>
+
+                            {secExpanded && (
+                              <div className="px-6 py-1.5 space-y-0.5">
+                                {sec.items.map((item, iIdx) => (
+                                  <label key={item.id} className="flex items-start gap-2.5 py-1.5 px-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={item.checked}
+                                      onChange={() => {
+                                        const updated = { ...currentEncounter };
+                                        updated.checklists = [...updated.checklists];
+                                        updated.checklists[cIdx] = { ...updated.checklists[cIdx] };
+                                        updated.checklists[cIdx].sections = [...updated.checklists[cIdx].sections];
+                                        updated.checklists[cIdx].sections[sIdx] = { ...updated.checklists[cIdx].sections[sIdx] };
+                                        updated.checklists[cIdx].sections[sIdx].items = [...updated.checklists[cIdx].sections[sIdx].items];
+                                        updated.checklists[cIdx].sections[sIdx].items[iIdx] = { ...item, checked: !item.checked };
+                                        updated.updatedAt = Date.now();
+                                        onUpdateEncounter(updated);
+                                      }}
+                                      className="mt-0.5 w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
+                                    />
+                                    <span className={`text-xs leading-relaxed ${item.checked ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-200'}`}>
+                                      {item.text}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* Notes Tab — Focused notes editing view */}
+      {detailTab === 'notes' && (
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-4">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-indigo-500" />
+              Clinical Notes
+            </h2>
+            <textarea
+              value={currentEncounter.generalNotes || ''}
+              onChange={(e) => {
+                onUpdateEncounter({ ...currentEncounter, generalNotes: e.target.value, updatedAt: Date.now() });
+              }}
+              rows={16}
+              placeholder="Type clinical notes, observations, and bedside impressions here..."
+              className="w-full text-sm p-4 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-900/50 text-slate-900 dark:text-slate-100 resize-y font-mono leading-relaxed"
+            />
+          </div>
+          <button
+            onClick={onEnterPatientFacingMode}
+            className="flex items-center gap-2 px-4 py-3 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 rounded-2xl text-sm font-bold transition-colors border border-emerald-200 dark:border-emerald-800 cursor-pointer w-full"
+          >
+            <PenTool className="w-4 h-4" />
+            <span>Open Full Canvas for Handwriting Notes</span>
+          </button>
+        </div>
+      )}
+
+      {/* Files Tab — Images, attachments, links */}
+      {detailTab === 'files' && (
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 sm:p-5 shadow-xs">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-4">
+              <ImageIcon className="w-4 h-4 text-rose-500" />
+              Images & Attachments
+            </h2>
+            {(!currentEncounter.images || currentEncounter.images.length === 0) ? (
+              <div className="text-center py-8">
+                <ImageIcon className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                <p className="text-sm text-slate-500 dark:text-slate-400">No images attached</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {currentEncounter.images.map((img, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActiveLightboxImage(img.url)}
+                    className="aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 hover:border-indigo-400 transition-colors cursor-pointer group"
+                  >
+                    <img src={img.url} alt={img.caption || 'Medical image'} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {currentEncounter.links && currentEncounter.links.length > 0 && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 sm:p-5 shadow-xs">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-3">
+                <ExternalLink className="w-4 h-4 text-blue-500" />
+                Clinical Links
+              </h2>
+              <div className="space-y-2">
+                {currentEncounter.links.map((link, i) => (
+                  <a key={i} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 transition-colors">
+                    <Globe className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{link.title || link.url}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+          {onOpenGallery && (
+            <button
+              onClick={onOpenGallery}
+              className="flex items-center gap-2 px-4 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl text-sm font-semibold transition-colors border border-slate-200/60 dark:border-slate-700 cursor-pointer w-full"
+            >
+              <ImageIcon className="w-4 h-4 text-rose-500" />
+              <span>Open Full Image Gallery</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Floating Handwriting-in-Box Scratchpad */}
       {activeHandwritingTarget && (

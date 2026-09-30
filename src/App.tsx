@@ -16,6 +16,7 @@ import { TemplateManagerView } from './components/templates/TemplateManagerView'
 import { ClinicalTemplateEditorModal } from './components/templates/ClinicalTemplateEditorModal';
 import { PatientEncounterView } from './components/patient/PatientEncounterView';
 import { PatientFacingMode } from './components/patient/PatientFacingMode';
+import { ProtocolsView } from './components/protocols/ProtocolsView';
 import { NewPatientModal } from './components/patient/NewPatientModal';
 import { VaultModal } from './components/security/VaultModal';
 import { ImageGalleryModal } from './components/patient/ImageGalleryModal';
@@ -78,20 +79,29 @@ export function App() {
     setFolders(flds || []);
     setIsVaultLocked(cryptoVault.isVaultLocked());
 
-    // Load saved tabs
+    // Load saved tabs with migration from old layout
     try {
       const savedTabs = await db.settings.get('workspace_tabs');
       if (savedTabs && savedTabs.value && savedTabs.value.length > 0) {
-        const hasKnowledge = savedTabs.value.some((t: WorkspaceTab) => t.type === 'knowledge');
-        if (!hasKnowledge) {
-          const merged = [
-            ...savedTabs.value,
-            { id: 'tab-knowledge', title: 'Knowledge Hub', type: 'knowledge' as TabType, isClosable: false, order: savedTabs.value.length },
-          ];
-          setTabs(merged);
-        } else {
-          setTabs(savedTabs.value);
+        let migrated = savedTabs.value as WorkspaceTab[];
+
+        // Migration: merge old 'checklists' and 'templates' tabs into 'protocols'
+        const hasProtocols = migrated.some((t: WorkspaceTab) => t.type === 'protocols');
+        if (!hasProtocols) {
+          migrated = migrated.filter((t: WorkspaceTab) => t.type !== 'checklists' && t.type !== 'templates');
+          migrated.push({ id: 'tab-protocols', title: 'Protocols', type: 'protocols' as TabType, isClosable: false, order: 1 });
         }
+
+        // Ensure knowledge tab exists
+        const hasKnowledge = migrated.some((t: WorkspaceTab) => t.type === 'knowledge');
+        if (!hasKnowledge) {
+          migrated.push({ id: 'tab-knowledge', title: 'Knowledge Hub', type: 'knowledge' as TabType, isClosable: false, order: migrated.length });
+        }
+
+        // Remove gallery from default tabs (still accessible from patient detail)
+        migrated = migrated.filter((t: WorkspaceTab) => t.type !== 'gallery');
+
+        setTabs(migrated);
       }
     } catch {}
   };
@@ -576,6 +586,57 @@ export function App() {
           />
         )}
 
+        {/* Unified Protocols View (merged Checklists + Templates) */}
+        {activeTab.type === 'protocols' && (
+          <ProtocolsView
+            checklists={checklists}
+            clinicalTemplates={clinicalTemplates}
+            onOpenChecklistEditor={(chk) => setEditingChecklist(chk)}
+            onCreateChecklist={() => {
+              const newChk: Checklist = {
+                id: 'chk-' + crypto.randomUUID(),
+                title: 'New Modular Checklist',
+                description: 'Clinical protocol steps and bounds',
+                category: 'General',
+                tags: ['custom'],
+                sections: [
+                  {
+                    id: 'sec-' + crypto.randomUUID(),
+                    title: 'Section 1',
+                    items: [{ id: 'item-' + crypto.randomUUID(), text: 'New item', checked: false }],
+                  },
+                ],
+                updatedAt: Date.now(),
+              };
+              setEditingChecklist(newChk);
+            }}
+            onDuplicateChecklist={handleDuplicateChecklist}
+            onTogglePinChecklist={handleTogglePinChecklist}
+            onDeleteChecklist={handleDeleteChecklist}
+            onInstantiateInEncounter={handleAddChecklistToActivePatient}
+            onOpenChecklistLlm={(chk) => setLlmTarget({ checklist: chk })}
+            onOpenTemplateEditor={(tmpl) => setEditingClinicalTemplate(tmpl)}
+            onCreateTemplate={() => {
+              const newTmpl: ClinicalTemplate = {
+                id: 'tmpl-' + crypto.randomUUID(),
+                title: 'New Clinical Template Bundle',
+                description: 'Bundle grouping multiple checklists and protocol guidance',
+                category: 'General',
+                tags: ['bundle'],
+                checklistIds: [],
+                protocolNotes:
+                  '### Standard Ward Guidance:\n- Step 1: Initial assessment\n- Step 2: Handoff protocol',
+                updatedAt: Date.now(),
+              };
+              setEditingClinicalTemplate(newTmpl);
+            }}
+            onTogglePinTemplate={handleTogglePinClinicalTemplate}
+            onDeleteTemplate={handleDeleteClinicalTemplate}
+            onApplyTemplateToPatient={handleApplyClinicalTemplateToPatient}
+          />
+        )}
+
+        {/* Backward compat: old saved tabs with type 'checklists' or 'templates' still work */}
         {activeTab.type === 'checklists' && (
           <ChecklistManagerView
             checklists={checklists}
