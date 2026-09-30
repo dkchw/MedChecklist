@@ -16,6 +16,12 @@ declare global {
       downloadAndInstallApk: (downloadUrl: string, versionName: string) => void;
       cancelDownload: () => void;
     };
+    AndroidDigitalInk?: {
+      isAvailable: () => boolean;
+      isModelReady: (languageTag?: string) => boolean;
+      checkAndDownloadModel: (languageTag?: string) => void;
+      recognizeInk: (requestId: string, jsonStrokes: string, languageTag?: string) => void;
+    };
   }
 }
 
@@ -103,3 +109,101 @@ export function subscribeToUpdateProgress(
     window.removeEventListener('android-update-progress', handler);
   };
 }
+
+export interface DigitalInkRecognitionResponse {
+  requestId: string;
+  status: 'success' | 'model_not_ready' | 'error';
+  candidates: string[];
+  topCandidate: string;
+  error?: string;
+}
+
+/**
+ * Returns true if running on Android with Google ML Kit Digital Ink Recognition available
+ */
+export function isDigitalInkAvailable(): boolean {
+  try {
+    return Boolean(
+      typeof window !== 'undefined' &&
+      window.AndroidDigitalInk &&
+      window.AndroidDigitalInk.isAvailable()
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Checks if the specified language ML model is downloaded and ready for inference
+ */
+export function isDigitalInkModelReady(languageTag = 'en-US'): boolean {
+  try {
+    return Boolean(
+      typeof window !== 'undefined' &&
+      window.AndroidDigitalInk &&
+      window.AndroidDigitalInk.isModelReady(languageTag)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Initiates background download of ML Kit model for given language
+ */
+export function requestDigitalInkModelDownload(languageTag = 'en-US'): void {
+  try {
+    if (typeof window !== 'undefined' && window.AndroidDigitalInk) {
+      window.AndroidDigitalInk.checkAndDownloadModel(languageTag);
+    }
+  } catch {}
+}
+
+/**
+ * Invokes native Google ML Kit Digital Ink Recognition asynchronously
+ */
+export async function recognizeDigitalInkNative(
+  strokes: any[],
+  languageTag = 'en-US',
+  timeoutMs = 4000
+): Promise<string[] | null> {
+  if (!isDigitalInkAvailable()) return null;
+
+  return new Promise((resolve) => {
+    const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+
+    const timer = setTimeout(() => {
+      window.removeEventListener('digitalInkRecognitionResult', handler as EventListener);
+      resolve(null);
+    }, timeoutMs);
+
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent<DigitalInkRecognitionResponse>;
+      if (customEvent.detail && customEvent.detail.requestId === requestId) {
+        clearTimeout(timer);
+        window.removeEventListener('digitalInkRecognitionResult', handler as EventListener);
+        if (
+          customEvent.detail.status === 'success' &&
+          customEvent.detail.candidates &&
+          customEvent.detail.candidates.length > 0
+        ) {
+          resolve(customEvent.detail.candidates);
+        } else {
+          resolve(null);
+        }
+      }
+    };
+
+    window.addEventListener('digitalInkRecognitionResult', handler as EventListener);
+
+    try {
+      const serialized = JSON.stringify(strokes);
+      window.AndroidDigitalInk!.recognizeInk(requestId, serialized, languageTag);
+    } catch (err) {
+      clearTimeout(timer);
+      window.removeEventListener('digitalInkRecognitionResult', handler as EventListener);
+      resolve(null);
+    }
+  });
+}
+

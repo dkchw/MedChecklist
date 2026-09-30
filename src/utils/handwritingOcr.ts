@@ -1,4 +1,5 @@
 import { InkStroke, StrokePoint } from '../types/ink';
+import { isDigitalInkAvailable, recognizeDigitalInkNative } from './androidBridge';
 
 export interface OcrResult {
   text: string;
@@ -821,6 +822,55 @@ export class HandwritingOcrService {
 
     const confidence = Math.min(0.99, Math.max(0.4, (bestScore + 1) / 2));
     return { char: bestChar, confidence };
+  }
+
+  /**
+   * Asynchronous OCR entry point:
+   * First tries Google ML Kit Digital Ink Recognition (on-device neural network on Android),
+   * and falls back to our local high-performance geometric/topological classifier.
+   */
+  public static async recognizeStrokesAsync(
+    strokes: InkStroke[],
+    languageTag: string = 'en-US'
+  ): Promise<OcrResult> {
+    const validStrokes = strokes.filter(
+      (s) => s.tool !== 'eraser' && s.points && s.points.length > 0
+    );
+
+    if (validStrokes.length === 0) {
+      return { text: '', confidence: 0, isNumeric: false };
+    }
+
+    // 1. Check if Google ML Kit Digital Ink Recognition is available on Android
+    if (isDigitalInkAvailable()) {
+      try {
+        const mlKitCandidates = await recognizeDigitalInkNative(validStrokes, languageTag);
+        if (mlKitCandidates && mlKitCandidates.length > 0 && mlKitCandidates[0].trim()) {
+          const topText = mlKitCandidates[0].trim();
+          const refinedText = this.postProcessMedicalVocabulary(topText);
+          const vitals = this.parseClinicalVitals(refinedText);
+
+          let finalOutput = refinedText;
+          if (vitals.bp) {
+            finalOutput = vitals.bp;
+          }
+
+          const isNumeric = /^[\d\s\/\.\-%+=]+$/.test(finalOutput.trim());
+
+          return {
+            text: finalOutput,
+            confidence: 0.99,
+            isNumeric,
+            parsedVitals: vitals,
+          };
+        }
+      } catch (err) {
+        console.warn('ML Kit digital ink recognition error, using local fallback:', err);
+      }
+    }
+
+    // 2. Fallback to local on-device trajectory & topological model
+    return this.recognizeStrokes(validStrokes);
   }
 
   /**

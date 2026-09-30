@@ -16,6 +16,7 @@ import {
   Laptop,
   Keyboard,
   Globe,
+  Sparkles,
 } from 'lucide-react';
 import { APP_VERSION } from '../../version';
 import { checkForGitHubUpdate, UpdateCheckResult } from '../../utils/githubUpdater';
@@ -370,6 +371,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 );
               })}
             </div>
+
+            {isAndroid && (
+              <div className="mt-3 p-3 bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-200">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <div>
+                    <span className="font-bold">Google ML Kit Digital Ink Recognition</span>
+                    <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">
+                      On-device neural network active for stylus handwriting & numbers
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 shrink-0">
+                  Ready
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Section 3: Clinical Vault & Security */}

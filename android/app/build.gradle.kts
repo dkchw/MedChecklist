@@ -11,8 +11,8 @@ android {
         applicationId = "com.medchecklist.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 19
-        versionName = "1.1.6"
+        versionCode = 20
+        versionName = "1.1.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -53,4 +53,5 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.webkit:webkit:1.11.0")
+    implementation("com.google.mlkit:digital-ink-recognition:18.1.0")
 }

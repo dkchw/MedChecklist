@@ -21,6 +21,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var updateManager: UpdateManager
+    private lateinit var digitalInkManager: DigitalInkManager
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
 
     private val fileChooserLauncher = registerForActivityResult(
@@ -49,6 +50,10 @@ class MainActivity : AppCompatActivity() {
         // Initialize UpdateManager and attach JS interface
         updateManager = UpdateManager(this, webView)
         webView.addJavascriptInterface(updateManager, "AndroidApp")
+
+        // Initialize Google ML Kit Digital Ink Recognition and attach JS interface
+        digitalInkManager = DigitalInkManager(this, webView)
+        webView.addJavascriptInterface(digitalInkManager, "AndroidDigitalInk")
 
         // Set up secure local asset loader to allow ES modules and IndexedDB
         val assetLoader = WebViewAssetLoader.Builder()
@@ -113,6 +118,9 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         if (::updateManager.isInitialized) {
             updateManager.cleanup()
+        }
+        if (::digitalInkManager.isInitialized) {
+            digitalInkManager.cleanup()
         }
         super.onDestroy()
     }

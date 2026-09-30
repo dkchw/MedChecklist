@@ -279,14 +279,19 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
     }
   };
 
-  const runOcr = (currentStrokes: InkStroke[]) => {
+  const runOcr = async (currentStrokes: InkStroke[]) => {
     setIsRecognizing(true);
-    const result = HandwritingOcrService.recognizeStrokes(currentStrokes);
-    setOcrResult(result);
-    if (result.text) {
-      setRecognizedText(result.text);
+    try {
+      const result = await HandwritingOcrService.recognizeStrokesAsync(currentStrokes, activeKeyboardId);
+      setOcrResult(result);
+      if (result.text) {
+        setRecognizedText(result.text);
+      }
+    } catch (err) {
+      console.error('OCR Error:', err);
+    } finally {
+      setIsRecognizing(false);
     }
-    setIsRecognizing(false);
   };
 
   const handleClear = () => {

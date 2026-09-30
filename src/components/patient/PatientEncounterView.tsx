@@ -1860,10 +1860,10 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
 
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           const strokes = currentEncounter.bedsideInkStrokes || [];
                           if (strokes.length === 0) return;
-                          const res = HandwritingOcrService.recognizeStrokes(strokes);
+                          const res = await HandwritingOcrService.recognizeStrokesAsync(strokes);
                           if (res.text) {
                             const prevNotes = currentEncounter.generalNotes ? currentEncounter.generalNotes + '\n' : '';
                             onUpdateEncounter({
