@@ -20,6 +20,7 @@ import androidx.webkit.WebViewClientCompat
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var updateManager: UpdateManager
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
 
     private val fileChooserLauncher = registerForActivityResult(
@@ -44,6 +45,10 @@ class MainActivity : AppCompatActivity() {
 
         webView = WebView(this)
         setContentView(webView)
+
+        // Initialize UpdateManager and attach JS interface
+        updateManager = UpdateManager(this, webView)
+        webView.addJavascriptInterface(updateManager, "AndroidApp")
 
         // Set up secure local asset loader to allow ES modules and IndexedDB
         val assetLoader = WebViewAssetLoader.Builder()
@@ -100,6 +105,16 @@ class MainActivity : AppCompatActivity() {
 
         // Load via secure origin so ES modules and IndexedDB work offline
         webView.loadUrl("https://appassets.androidplatform.net/assets/index.html")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::updateManager.isInitialized) {
+            val pending = updateManager.pendingApkFile
+            if (pending != null && updateManager.checkCanInstallPackages()) {
+                updateManager.installApk(pending)
+            }
+        }
     }
 
     @Deprecated("Deprecated in Java")

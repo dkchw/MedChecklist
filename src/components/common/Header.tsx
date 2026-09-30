@@ -42,6 +42,7 @@ interface HeaderProps {
   onImportBackup: () => void;
   themeMode: ThemeMode;
   onToggleTheme: () => void;
+  onCheckUpdate?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -57,6 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
   onImportBackup,
   themeMode,
   onToggleTheme,
+  onCheckUpdate,
 }) => {
 
   const getTabIcon = (type: TabType) => {
@@ -90,9 +92,14 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800">
                 MD-First
               </span>
-              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded">
+              <button
+                type="button"
+                onClick={onCheckUpdate}
+                title="Click to check for updates"
+                className="text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-200 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+              >
                 v{APP_VERSION}
-              </span>
+              </button>
             </div>
           </div>
         </div>

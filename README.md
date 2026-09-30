@@ -127,9 +127,15 @@ A minimalist, high-performance, clinical-grade medical checklist and patient enc
 
 ---
 
-### 🚀 In-App Multi-Platform Release Updater
-- In-app update banner checks GitHub Releases for new published tags.
-- Direct 1-click download links for Android APK (`.apk`) and Linux Desktop packages (`.tar.gz`).
+### 🚀 In-App Multi-Platform Release Updater & Android Auto-Update
+- **Automated GitHub Release Query**: Automatically checks the public GitHub repository for published releases and compares semantic versions.
+- **Android Native In-App Auto-Update**:
+  - **1-Click Auto-Update & Install**: Tapping "Auto-Update & Install" downloads the release APK directly in a background thread with automatic S3 redirect following.
+  - **Live Progress Reporting**: Real-time progress bar shows download percentage, transfer speed, and megabytes downloaded directly in the app.
+  - **System Package Installer Handshake**: On completion, automatically launches Android's system package installer (`Intent.ACTION_VIEW` via secure `FileProvider`).
+  - **Unknown Sources Permission Management**: Automatically guides clinicians to Android's "Allow from this source" toggle on Android 8.0+ (Oreo, API 26+) and seamlessly resumes installation on return.
+  - **Manual Update Check**: Clinicians can tap the header version badge (`vX.X.X`) at any time to instantly check for newer releases.
+- **Desktop & Web Release Support**: Direct 1-click download links for Linux Desktop packages (`.tar.gz`) and Web bundles.
 
 ---
 
@@ -139,7 +145,7 @@ MedChecklist is released simultaneously for **Android**, **Linux Desktop**, and 
 
 ### 📱 1. Android Tablet / Phone
 - **Download**: Download `medchecklist-vX.X.X.apk` from the [GitHub Releases](https://github.com/dkchw/MedChecklist/releases) page.
-- **Features**: Full hardware S-Pen / stylus pressure sensitivity, offline handwriting OCR, camera QR scanner, and offline local encryption.
+- **Features**: Full hardware S-Pen / stylus pressure sensitivity, offline handwriting OCR, camera QR scanner, offline local encryption, and **in-app auto-update directly from GitHub**.
 
 ### 💻 2. Linux Desktop Workstation
 - **Download**: Download `medchecklist-vX.X.X-desktop-linux-x86_64.tar.gz` from [GitHub Releases](https://github.com/dkchw/MedChecklist/releases).

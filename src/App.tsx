@@ -23,6 +23,7 @@ import { cryptoVault } from './utils/cryptoVault';
 import { checkForGitHubUpdate, UpdateCheckResult } from './utils/githubUpdater';
 import { UpdateBanner } from './components/common/UpdateBanner';
 import { getInitialTheme, applyTheme, ThemeMode } from './utils/theme';
+import { APP_VERSION } from './version';
 
 export function App() {
   // Customizable Tabs State
@@ -99,6 +100,15 @@ export function App() {
       }
     });
   }, []);
+
+  const handleCheckUpdate = async () => {
+    const res = await checkForGitHubUpdate('dkchw', 'MedChecklist');
+    if (res && res.hasUpdate) {
+      setUpdateInfo(res);
+    } else {
+      alert(`MedChecklist is up to date (v${APP_VERSION}).`);
+    }
+  };
 
   // Keyboard shortcut for search (⌘K or Ctrl+K)
   useEffect(() => {
@@ -383,6 +393,7 @@ export function App() {
         onImportBackup={handleImportBackup}
         themeMode={themeMode}
         onToggleTheme={handleToggleTheme}
+        onCheckUpdate={handleCheckUpdate}
       />
 
       <main className="flex-1">
