@@ -35,6 +35,56 @@ interface TemplatePrototype {
   loopYRange?: [number, number]; // [minY, maxY] of loop center
 }
 
+/**
+ * Pure function: Resamples an arbitrary polyline into N equidistant points along its path length
+ */
+function resamplePolyline(points: NormalizedPoint[], n: number = 32): NormalizedPoint[] {
+  if (points.length === 0) return [];
+  if (points.length === 1) {
+    return Array.from({ length: n }, () => ({ x: points[0].x, y: points[0].y }));
+  }
+
+  const lengths: number[] = [0];
+  let totalLength = 0;
+  for (let i = 1; i < points.length; i++) {
+    const d = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    totalLength += d;
+    lengths.push(totalLength);
+  }
+
+  if (totalLength === 0) {
+    return Array.from({ length: n }, () => ({ x: points[0].x, y: points[0].y }));
+  }
+
+  const step = totalLength / (n - 1);
+  const resampled: NormalizedPoint[] = [{ x: points[0].x, y: points[0].y }];
+
+  let currentDist = step;
+  let segIdx = 0;
+
+  for (let i = 1; i < n - 1; i++) {
+    while (segIdx < lengths.length - 1 && lengths[segIdx + 1] < currentDist) {
+      segIdx++;
+    }
+    const segStartLen = lengths[segIdx];
+    const segEndLen = lengths[segIdx + 1];
+    const segLen = segEndLen - segStartLen;
+    const t = segLen > 0 ? (currentDist - segStartLen) / segLen : 0;
+
+    const p0 = points[segIdx];
+    const p1 = points[segIdx + 1];
+    resampled.push({
+      x: p0.x + (p1.x - p0.x) * t,
+      y: p0.y + (p1.y - p0.y) * t,
+    });
+
+    currentDist += step;
+  }
+
+  resampled.push({ x: points[points.length - 1].x, y: points[points.length - 1].y });
+  return resampled;
+}
+
 // 32-point normalized polyline prototypes
 const RAW_PROTOTYPES: { char: string; category: 'digit' | 'symbol' | 'letter'; controlPoints: NormalizedPoint[]; loops?: number; loopY?: [number, number] }[] = [
   // Digit 0 (Oval counter-clockwise)
@@ -353,13 +403,19 @@ const RAW_PROTOTYPES: { char: string; category: 'digit' | 'symbol' | 'letter'; c
   }
 ];
 
-const COMPILED_TEMPLATES: TemplatePrototype[] = RAW_PROTOTYPES.map((p) => ({
-  char: p.char,
-  category: p.category,
-  points: HandwritingOcrService.resamplePolyline(p.controlPoints, 32),
-  loopRequirement: p.loops,
-  loopYRange: p.loopY,
-}));
+let _compiledTemplates: TemplatePrototype[] | null = null;
+function getCompiledTemplates(): TemplatePrototype[] {
+  if (!_compiledTemplates) {
+    _compiledTemplates = RAW_PROTOTYPES.map((p) => ({
+      char: p.char,
+      category: p.category,
+      points: resamplePolyline(p.controlPoints, 32),
+      loopRequirement: p.loops,
+      loopYRange: p.loopY,
+    }));
+  }
+  return _compiledTemplates;
+}
 
 const MEDICAL_KEYWORDS: string[] = [
   'BP', 'HR', 'RR', 'TEMP', 'SPO2', 'MG', 'ML', 'MCG', 'TAB', 'PO', 'IV', 'IM',
@@ -372,50 +428,7 @@ export class HandwritingOcrService {
    * Resamples an arbitrary polyline into N equidistant points along its path length
    */
   public static resamplePolyline(points: NormalizedPoint[], n: number = 32): NormalizedPoint[] {
-    if (points.length === 0) return [];
-    if (points.length === 1) {
-      return Array.from({ length: n }, () => ({ x: points[0].x, y: points[0].y }));
-    }
-
-    const lengths: number[] = [0];
-    let totalLength = 0;
-    for (let i = 1; i < points.length; i++) {
-      const d = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
-      totalLength += d;
-      lengths.push(totalLength);
-    }
-
-    if (totalLength === 0) {
-      return Array.from({ length: n }, () => ({ x: points[0].x, y: points[0].y }));
-    }
-
-    const step = totalLength / (n - 1);
-    const resampled: NormalizedPoint[] = [{ x: points[0].x, y: points[0].y }];
-
-    let currentDist = step;
-    let segIdx = 0;
-
-    for (let i = 1; i < n - 1; i++) {
-      while (segIdx < lengths.length - 1 && lengths[segIdx + 1] < currentDist) {
-        segIdx++;
-      }
-      const segStartLen = lengths[segIdx];
-      const segEndLen = lengths[segIdx + 1];
-      const segLen = segEndLen - segStartLen;
-      const t = segLen > 0 ? (currentDist - segStartLen) / segLen : 0;
-
-      const p0 = points[segIdx];
-      const p1 = points[segIdx + 1];
-      resampled.push({
-        x: p0.x + (p1.x - p0.x) * t,
-        y: p0.y + (p1.y - p0.y) * t,
-      });
-
-      currentDist += step;
-    }
-
-    resampled.push({ x: points[points.length - 1].x, y: points[points.length - 1].y });
-    return resampled;
+    return resamplePolyline(points, n);
   }
 
   /**
@@ -755,7 +768,7 @@ export class HandwritingOcrService {
     let bestChar = '1';
     let bestScore = -Infinity;
 
-    for (const template of COMPILED_TEMPLATES) {
+    for (const template of getCompiledTemplates()) {
       let fwdDist = 0;
       let revDist = 0;
       const tPts = template.points;
