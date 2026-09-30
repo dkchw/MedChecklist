@@ -40,8 +40,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Enable remote Chrome DevTools debugging (chrome://inspect)
-        WebView.setWebContentsDebuggingEnabled(true)
+        // Disable remote debugging in release builds for Play Protect compliance
+        WebView.setWebContentsDebuggingEnabled(false)
 
         webView = WebView(this)
         setContentView(webView)
@@ -108,12 +108,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::updateManager.isInitialized) {
-            val pending = updateManager.pendingApkFile
-            if (pending != null && updateManager.checkCanInstallPackages()) {
-                updateManager.installApk(pending)
-            }
-        }
     }
 
     @Deprecated("Deprecated in Java")
