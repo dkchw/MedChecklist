@@ -86,9 +86,11 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Brand & Dynamic Tabs */}
       <div className="flex items-center gap-3 sm:gap-4 flex-wrap flex-1 min-w-0">
         <div className="flex items-center gap-2 shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-slate-900 dark:bg-slate-800 text-white flex items-center justify-center shadow-xs border border-slate-800 dark:border-slate-700">
-            <Stethoscope className="w-4 h-4 text-emerald-400" />
-          </div>
+          <img
+            src="/icon.png"
+            alt="MedChecklist Logo"
+            className="w-8 h-8 rounded-xl object-contain shadow-xs border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900"
+          />
           <div>
             <div className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
               <span>MedChecklist</span>

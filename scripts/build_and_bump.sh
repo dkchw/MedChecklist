@@ -94,6 +94,7 @@ cp scripts/templates/medchecklist-desktop.sh "$DESKTOP_DIR/medchecklist-desktop.
 chmod +x "$DESKTOP_DIR/medchecklist-desktop.sh"
 cp scripts/templates/medchecklist.desktop "$DESKTOP_DIR/medchecklist.desktop"
 chmod +x "$DESKTOP_DIR/medchecklist.desktop"
+cp scripts/templates/medchecklist.png "$DESKTOP_DIR/medchecklist.png"
 
 cat <<EOF > "$DESKTOP_DIR/README.txt"
 MedChecklist Desktop Workstation v${NEW_VERSION} (Linux x86_64)
