@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
   Edit2,
   Check,
+  GraduationCap,
 } from 'lucide-react';
 import { ThemeMode } from '../../utils/theme';
 import { WorkspaceTab, TabType } from '../../types/tab';
@@ -69,6 +70,8 @@ export const Header: React.FC<HeaderProps> = ({
         return <CheckSquare className="w-3.5 h-3.5 text-emerald-500" />;
       case 'templates':
         return <Layers className="w-3.5 h-3.5 text-amber-500" />;
+      case 'knowledge':
+        return <GraduationCap className="w-3.5 h-3.5 text-purple-500" />;
       case 'gallery':
         return <ImageIcon className="w-3.5 h-3.5 text-rose-500" />;
       case 'folder':

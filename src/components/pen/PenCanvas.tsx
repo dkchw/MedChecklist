@@ -262,6 +262,24 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     renderDisplay();
   }, [updateBackgroundBuffer, renderDisplay]);
 
+  // Re-render buffer canvas when dark/light mode class changes on html
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      updateBackgroundBuffer();
+      renderDisplay();
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, [updateBackgroundBuffer, renderDisplay]);
+
+  // Helper to detect if stylus barrel / eraser button is currently pressed
+  const isPenEraserActive = (e: React.PointerEvent<HTMLCanvasElement> | PointerEvent): boolean => {
+    return (
+      e.pointerType === 'pen' &&
+      ((e.buttons & 2) !== 0 || (e.buttons & 32) !== 0 || e.button === 2 || e.button === 5)
+    );
+  };
+
   // Pointer Down
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     // Palm Rejection Guard
@@ -279,13 +297,17 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     const { x, y } = getCanvasCoords(e.clientX, e.clientY);
     const pressure = e.pressure && e.pressure > 0 ? Math.max(0.12, Math.min(1.0, e.pressure)) : 0.5;
 
-    if (tool === 'eraser') {
+    const isEraser = tool === 'eraser' || isPenEraserActive(e);
+
+    if (isEraser) {
+      activePointsRef.current = [];
       const remaining = strokes.filter(
         (s) => (s.pageIndex ?? 0) !== pageIndex || !isPointNearStroke({ x, y }, s, size * 2.5)
       );
       if (remaining.length !== strokes.length) {
         onChangeStrokes(remaining);
       }
+      scheduleRender();
     } else if (tool === 'selector') {
       if (
         selectedBounds &&
@@ -322,13 +344,17 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
       const { x, y } = getCanvasCoords(ev.clientX, ev.clientY);
       const pressure = ev.pressure && ev.pressure > 0 ? Math.max(0.12, Math.min(1.0, ev.pressure)) : 0.5;
 
-      if (tool === 'eraser') {
+      const isEraser = tool === 'eraser' || isPenEraserActive(ev);
+
+      if (isEraser) {
+        activePointsRef.current = [];
         const remaining = strokes.filter(
           (s) => (s.pageIndex ?? 0) !== pageIndex || !isPointNearStroke({ x, y }, s, size * 2.5)
         );
         if (remaining.length !== strokes.length) {
           onChangeStrokes(remaining);
         }
+        scheduleRender();
       } else if (tool === 'selector') {
         if (isDraggingSelectionRef.current && dragStartPosRef.current) {
           dragDeltaRef.current = {
@@ -351,6 +377,13 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (penOnlyMode && e.pointerType !== 'pen') return;
     isDrawingRef.current = false;
+
+    const isEraser = tool === 'eraser' || isPenEraserActive(e);
+    if (isEraser) {
+      activePointsRef.current = [];
+      scheduleRender();
+      return;
+    }
 
     if (tool === 'selector') {
       if (isDraggingSelectionRef.current) {
@@ -391,6 +424,26 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
         scheduleRender();
       }
     } else if (activePointsRef.current.length > 0) {
+      // Check if stylus tapped or ticked a checklist item element underneath
+      const elements = typeof document !== 'undefined' ? document.elementsFromPoint(e.clientX, e.clientY) : [];
+      let checkedItem = false;
+      for (const el of elements) {
+        if (el === canvasRef.current) continue;
+        const target = el.closest('[data-checklist-item]');
+        if (target) {
+          (target as HTMLElement).click();
+          checkedItem = true;
+          break;
+        }
+      }
+
+      // If it was a quick tap or small tick that successfully toggled the item, clean up without committing stray ink mark
+      if (checkedItem && activePointsRef.current.length <= 8) {
+        activePointsRef.current = [];
+        scheduleRender();
+        return;
+      }
+
       const newStroke: InkStroke = {
         id: 'stroke-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
         points: [...activePointsRef.current],

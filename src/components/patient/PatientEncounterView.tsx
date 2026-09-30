@@ -12,6 +12,7 @@ import {
   Copy,
   Star,
   Check,
+  CheckSquare,
   Building2,
   Trash2,
   MessageSquare,
@@ -110,7 +111,11 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
   // End Note 3 Modes state: 'text' | 'handwriting' | 'convert'
   const [endNoteMode, setEndNoteMode] = useState<'text' | 'handwriting' | 'convert'>('text');
   const [endNoteTool, setEndNoteTool] = useState<PenToolType>('pen');
-  const [endNoteColor, setEndNoteColor] = useState<string>('#0f172a');
+  const [endNoteColor, setEndNoteColor] = useState<string>(() =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+      ? '#f8fafc'
+      : '#0f172a'
+  );
   const [endNoteSize, setEndNoteSize] = useState<number>(3);
   const [endNotePenOnly, setEndNotePenOnly] = useState<boolean>(true);
 
@@ -726,14 +731,16 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
           )}
         </div>
       ) : (
-        <>
-          {/* Patient Dossier Header */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors">
-            <div className="flex-1">
-              <div className="flex items-center gap-2.5 mb-1 flex-wrap">
-                <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                  {currentEncounter.patientIdentifier}
-                </h1>
+        <div className="lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
+          {/* Left Column: Sticky Patient Profile & Protocol Navigator in Landscape Mode */}
+          <div className="lg:col-span-4 xl:col-span-4 lg:sticky lg:top-20 space-y-4 mb-6 lg:mb-0">
+            {/* Patient Dossier Card */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs transition-colors space-y-4">
+              <div>
+                <div className="flex items-center gap-2.5 mb-1 flex-wrap">
+                  <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                    {currentEncounter.patientIdentifier}
+                  </h1>
                 {currentEncounter.bedNumber && (
                   <span className="text-xs bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-900">
                     Bed {currentEncounter.bedNumber}
@@ -1037,7 +1044,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap pt-3 border-t border-slate-100 dark:border-slate-800">
               {/* Bedside Mode Button */}
               {currentEncounter.status === 'active' && (
                 <button
@@ -1139,21 +1146,61 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
             </div>
           </div>
 
-          {/* Floating Handwriting-in-Box Scratchpad */}
-          {activeHandwritingTarget && (
-            <div className="fixed bottom-8 right-8 z-50 w-96 max-w-[90vw]">
-              <HandwritingInputBox
-                label={activeHandwritingTarget.label}
-                value={activeHandwritingTarget.initialValue}
-                isNumericOnly={activeHandwritingTarget.isNumericOnly}
-                onAccept={(val) => {
-                  activeHandwritingTarget.onAccept(val);
-                  setActiveHandwritingTarget(null);
-                }}
-                onClose={() => setActiveHandwritingTarget(null)}
-              />
+          {/* Quick Checklist TOC / Protocol Navigator */}
+          {currentEncounter.checklists.length > 0 && (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 shadow-xs">
+              <div className="flex items-center justify-between mb-2.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <CheckSquare className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Protocols ({currentEncounter.checklists.length})</span>
+                </h3>
+                <button
+                  onClick={() => setShowAttachMenu(!showAttachMenu)}
+                  className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Attach</span>
+                </button>
+              </div>
+
+              <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
+                {currentEncounter.checklists.map((chk) => {
+                  const totalItems = chk.sections.reduce((acc, s) => acc + s.items.length, 0);
+                  const doneItems = chk.sections.reduce(
+                    (acc, s) => acc + s.items.filter((i) => i.checked).length,
+                    0
+                  );
+                  const pct = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : 0;
+                  return (
+                    <a
+                      key={chk.id}
+                      href={`#chk-${chk.id}`}
+                      className="block p-2 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all text-xs group"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate">
+                          {chk.title}
+                        </span>
+                        <span className="text-[10px] font-mono font-medium text-slate-500 dark:text-slate-400">
+                          {doneItems}/{totalItems} ({pct}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="bg-emerald-500 h-1.5 rounded-full transition-all duration-300"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
             </div>
           )}
+        </div>
+
+        {/* Right Column: Checklists, Protocols & Bedside Notes */}
+        <div className="lg:col-span-8 xl:col-span-8 space-y-6">
 
           {/* Checklists Attached to Patient */}
           <div className="space-y-6">
@@ -1197,7 +1244,8 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
             {currentEncounter.checklists.map((chk, chkIdx) => (
               <div
                 key={chk.id}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-2xs"
+                id={`chk-${chk.id}`}
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-2xs scroll-mt-20"
               >
                 {/* Checklist Header */}
                 <div className="px-5 py-3.5 bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
@@ -1270,6 +1318,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                         {sec.items.map((item, itmIdx) => (
                           <div
                             key={item.id}
+                            data-checklist-item="true"
                             className={`p-3 rounded-xl border transition-all flex flex-col gap-2 ${
                               item.checked
                                 ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/60'
@@ -1280,12 +1329,14 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                               <div className="flex items-center gap-2.5 flex-1 min-w-0">
                                 <input
                                   type="checkbox"
+                                  data-checklist-item="true"
                                   checked={item.checked}
                                   onChange={() => handleToggleItem(chkIdx, secIdx, itmIdx)}
                                   className="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer"
                                 />
 
                                 <span
+                                  data-checklist-item="true"
                                   onClick={() => handleToggleItem(chkIdx, secIdx, itmIdx)}
                                   className={`text-xs font-medium cursor-pointer truncate ${
                                     item.checked
@@ -1626,13 +1677,13 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                     {/* Colors & Palm Rejection Toggle */}
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1">
-                        {['#0f172a', '#2563eb', '#dc2626', '#16a34a', '#d97706'].map((c) => (
+                        {[(typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? '#f8fafc' : '#0f172a'), '#2563eb', '#dc2626', '#16a34a', '#d97706'].map((c) => (
                           <button
                             key={c}
                             onClick={() => setEndNoteColor(c)}
                             style={{ backgroundColor: c }}
                             className={`w-5 h-5 rounded-full border-2 transition-transform ${
-                              endNoteColor === c ? 'scale-125 border-indigo-500' : 'border-white dark:border-slate-900'
+                              endNoteColor === c ? 'scale-125 border-indigo-500 ring-1 ring-indigo-400' : 'border-white dark:border-slate-800'
                             }`}
                           />
                         ))}
@@ -1778,7 +1829,24 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
               )}
             </div>
           </div>
-        </>
+        </div>
+      </div>
+      )}
+
+      {/* Floating Handwriting-in-Box Scratchpad */}
+      {activeHandwritingTarget && (
+        <div className="fixed bottom-8 right-8 z-50 w-96 max-w-[90vw]">
+          <HandwritingInputBox
+            label={activeHandwritingTarget.label}
+            value={activeHandwritingTarget.initialValue}
+            isNumericOnly={activeHandwritingTarget.isNumericOnly}
+            onAccept={(val) => {
+              activeHandwritingTarget.onAccept(val);
+              setActiveHandwritingTarget(null);
+            }}
+            onClose={() => setActiveHandwritingTarget(null)}
+          />
+        </div>
       )}
 
       {/* Attach Modal */}

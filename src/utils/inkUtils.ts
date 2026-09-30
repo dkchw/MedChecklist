@@ -52,16 +52,36 @@ export function drawStrokeOnCanvas(
   const path = new Path2D(pathData);
 
   ctx.save();
+  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const renderColor = getAdaptiveInkColor(stroke.color, isDark);
+
   if (stroke.tool === 'highlighter') {
     ctx.globalAlpha = 0.35;
-    ctx.fillStyle = stroke.color;
+    ctx.fillStyle = renderColor;
   } else {
     ctx.globalAlpha = stroke.opacity ?? 1.0;
-    ctx.fillStyle = stroke.color;
+    ctx.fillStyle = renderColor;
   }
 
   ctx.fill(path);
   ctx.restore();
+}
+
+/**
+ * Returns an ink color adapted to the current theme so text/strokes are visible in both light and dark modes
+ */
+export function getAdaptiveInkColor(color: string, isDark: boolean): string {
+  if (!color) return isDark ? '#f8fafc' : '#0f172a';
+
+  // If black or near-black ink in dark mode, adapt to white/light slate
+  if (isDark && (color === '#0f172a' || color === '#000000' || color === '#1e293b' || color === '#334155')) {
+    return '#f8fafc';
+  }
+  // If white or near-white ink in light mode, adapt to dark slate
+  if (!isDark && (color === '#f8fafc' || color === '#ffffff' || color === '#f1f5f9' || color === '#e2e8f0')) {
+    return '#0f172a';
+  }
+  return color;
 }
 
 /**

@@ -102,6 +102,49 @@ A minimalist, high-performance, clinical-grade medical checklist and patient enc
 
 ---
 
+### 🖊️ Stylus Barrel Button Eraser & Direct Pen Ticking
+- **Physical Barrel Button Eraser**: Pressing and holding the physical hardware button on active styluses (Samsung S-Pen, USI, Wacom, Surface Pen) instantly switches the tool into an eraser on-the-fly (`e.buttons & 2`, `e.buttons & 32`, `e.button === 2 || 5`), reverting immediately back to your drawing tool when released with zero UI mode switching.
+- **Direct Pen Ticking for Checklists**: Clinicians can check and uncheck protocol items directly using the pen tip (`data-checklist-item`). The canvas intelligently intercepts short taps and tick strokes over checklist items, toggling the item and keeping stray ink blobs off the sheet.
+- **Theme-Adaptive Inking Color**: Default ink dynamically renders `#f8fafc` (crisp white) in dark mode and `#0f172a` (deep slate) in light mode, ensuring that notes and drawings remain perfectly legible regardless of theme changes.
+
+---
+
+### 🖥️ Tablet Landscape Dual-Column Split Panel
+- **Optimized for Hospital Tablets & Desktop Monitors**: Responsive layout (`lg:grid lg:grid-cols-12`) that eliminates cumbersome vertical scrolling during rounds:
+  - **Left Sticky Dossier (4 Cols)**: Patient identifier, bed number, facility & ward tags, age/sex, Chief Complaint with inline OCR scratchpad, quick tags, media attachments, 1-click Bedside Mode launcher, and an interactive **Protocol Navigator (TOC)** with live completion percentages and progress bars.
+  - **Right Workspace (8 Cols)**: Full checklist protocols with laboratory reference bounds, clinical recall question marks (`?`), inline markdown notes, and 3-mode Bedside Clinical Notes (Text Only, Handwriting Only, and Handwriting-to-Text OCR).
+
+---
+
+### 📂 Unified Hierarchical Folder System (Facility → Ward)
+- **Nested Clinical Tree**: Intuitive hierarchy of **Hospital / Clinic (Facility)** $\rightarrow$ **Ward / Unit** $\rightarrow$ **Patients & Protocols**.
+- **Collapsible Tree Navigator**: Expand and collapse facility nodes, inspect bed counts and active patient volume, and assign patient encounters to specific wards directly from bedside rounds.
+
+---
+
+### 🧠 Clinical Knowledge Hub & Desktop Vault Sync (Obsidian, Zettlr, Markdown-Oxide)
+- **Clinical Knowledge Hub**:
+  - Markdown editor with **Edit**, **Split**, and **Live Preview** modes for medical study notes, clinical pearls, and protocol guidelines.
+  - Seamlessly link checklists and templates with interactive protocol cards and standard Obsidian wikilinks `[[Protocol Name]]`.
+  - Filter notes by Facility, Ward, or custom topic folders.
+- **Bidirectional Desktop Vault Sync**:
+  - Connect directly to your local desktop folder (e.g. an existing **Obsidian Vault** or **Zettlr** directory) using the Web File System Access API (`showDirectoryPicker`).
+  - **Push & Pull**: Exports your entire clinical knowledge base into clean Markdown files on disk and automatically imports external `.md` notes.
+- **100% Obsidian, Zettlr & Markdown-Oxide Compatible**:
+  - **Structured Folders**: Organizes into `Clinical Protocols/`, `Clinical Templates/`, `Study Sessions/`, and `Knowledge Notes/Facility/Ward/`.
+  - **Standard YAML Frontmatter**: Includes `title`, `tags`, `facility`, `ward`, `aliases`, `type`, and `updated` fields.
+  - **Wikilinks & MOC**: Generates a root `README.md` Map of Content with `[[wikilinks]]` recognized natively by Obsidian, Zettlr, and the `markdown-oxide` Language Server Protocol.
+  - **LSP Configuration**: Automatically generates `.obsidian/app.json` and `.moxide.toml` for out-of-the-box LSP diagnostics and autocompletion in VSCode, Neovim, and Helix.
+  - **Offline ZIP Fallback**: 1-click download of the complete vault as a standalone `.zip` archive on any device.
+
+---
+
+### 📖 Interactive Checklist Reader & Saved Study Runs
+- **Interactive Protocol Practice**: Click any checklist or template in the Knowledge Hub or Checklist Library to launch a dedicated protocol study modal without needing to create a patient encounter.
+- **Saved Lesson Runs**: Checking items during study sessions or lectures does not mutate master protocols; clinicians can save their interactive run with custom lecture notes to the `checklistRuns` history table.
+
+---
+
 ### 🌙 Dark Mode & High-Contrast Clinical Themes
 - Comprehensive dark mode built with deep slate tones (`slate-900`/`slate-800`), crisp high-contrast text (`slate-100`/`slate-200`), distinct borders (`slate-700`), and accessible badge indicators.
 - Eliminates low-contrast washed out gray-on-white text, providing comfortable night-shift readability in dark hospital rooms.

@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import getStroke from 'perfect-freehand';
 import { HandwritingOcrService, OcrResult } from '../../utils/handwritingOcr';
 import { InkStroke, StrokePoint } from '../../types/ink';
+import { isPointNearStroke, getAdaptiveInkColor } from '../../utils/inkUtils';
 import { Pen, Check, RotateCcw, X, Sparkles, ArrowRightLeft, Sliders } from 'lucide-react';
 
 interface HandwritingInputBoxProps {
@@ -65,8 +66,8 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
       }
     );
     if (outlinePoints.length === 0) return;
-
-    ctx.fillStyle = color;
+    const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+    ctx.fillStyle = getAdaptiveInkColor(color, isDark);
     ctx.beginPath();
     ctx.moveTo(outlinePoints[0][0], outlinePoints[0][1]);
     for (let i = 1; i < outlinePoints.length; i++) {
@@ -139,7 +140,8 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
     // Draw active stroke on top without React state overhead
     const activePts = activePointsRef.current;
     if (activePts.length > 0) {
-      drawStroke(ctx, activePts, '#0f172a', 3.5);
+      const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+      drawStroke(ctx, activePts, isDark ? '#f8fafc' : '#0f172a', 3.5);
     }
   }, []);
 
@@ -168,6 +170,13 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
     renderCanvas();
   }, [strokes, updateBackgroundBuffer, renderCanvas]);
 
+  const isPenEraserActive = (e: React.PointerEvent<HTMLCanvasElement> | PointerEvent): boolean => {
+    return (
+      e.pointerType === 'pen' &&
+      ((e.buttons & 2) !== 0 || (e.buttons & 32) !== 0 || e.button === 2 || e.button === 5)
+    );
+  };
+
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -178,6 +187,17 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
+
+    if (isPenEraserActive(e)) {
+      activePointsRef.current = [];
+      const remaining = strokes.filter((s) => !isPointNearStroke({ x, y }, s, 25));
+      if (remaining.length !== strokes.length) {
+        setStrokes(remaining);
+        runOcr(remaining);
+      }
+      scheduleRender();
+      return;
+    }
 
     activePointsRef.current = [{ x, y, pressure }];
     scheduleRender();
@@ -197,20 +217,39 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
       const x = ev.clientX - rect.left;
       const y = ev.clientY - rect.top;
       const pressure = ev.pressure && ev.pressure > 0 ? ev.pressure : 0.5;
+
+      if (isPenEraserActive(ev)) {
+        activePointsRef.current = [];
+        const remaining = strokes.filter((s) => !isPointNearStroke({ x, y }, s, 25));
+        if (remaining.length !== strokes.length) {
+          setStrokes(remaining);
+          runOcr(remaining);
+        }
+        scheduleRender();
+        continue;
+      }
+
       activePointsRef.current.push({ x, y, pressure });
     }
     scheduleRender();
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawingRef.current) return;
     isDrawingRef.current = false;
 
+    if (isPenEraserActive(e)) {
+      activePointsRef.current = [];
+      scheduleRender();
+      return;
+    }
+
     if (activePointsRef.current.length > 0) {
+      const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
       const newStroke: InkStroke = {
         id: 'stroke-' + Date.now(),
         points: [...activePointsRef.current],
-        color: '#0f172a',
+        color: isDark ? '#f8fafc' : '#0f172a',
         size: 3.5,
         tool: 'pen',
         timestamp: Date.now(),

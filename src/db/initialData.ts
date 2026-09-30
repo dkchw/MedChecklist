@@ -452,3 +452,68 @@ export const INITIAL_ENCOUNTERS: PatientEncounter[] = [
     ]
   }
 ];
+
+export const INITIAL_KNOWLEDGE_NOTES = [
+  {
+    id: 'note-sepsis-study',
+    title: 'Surviving Sepsis Campaign: 3-Hour & 1-Hour Protocol Summary',
+    content: `# Surviving Sepsis Protocol & Clinical Study Notes
+
+## Immediate Actions (Within 1 Hour)
+1. **Lactate Measurement**: Re-measure if initial lactate > 2 mmol/L.
+2. **Blood Cultures**: Obtain prior to broad-spectrum antimicrobials.
+3. **Broad-Spectrum Antibiotics**: Administer within 1 hour of recognition.
+4. **Fluid Resuscitation**: 30 mL/kg IV crystalloid for hypotension (MAP < 65 mmHg) or lactate >= 4 mmol/L.
+5. **Vasopressors**: Norepinephrine first-line to maintain MAP >= 65 mmHg.
+
+---
+
+### Linked Clinical Checklists & Templates
+- [Checklist: Sepsis 3-Hour Resuscitation Bundle](checklist://chk-sepsis-bundle)
+- [Template: Sepsis Resuscitation Bundle](template://tmpl-sepsis)
+
+> 💡 **Study Pearl**: Dynamic assessments of fluid responsiveness (passive leg raise, stroke volume variation) are superior to static measurements.
+`,
+    facility: 'St. Jude Medical Center',
+    ward: 'ICU',
+    tags: ['sepsis', 'critical-care', 'resuscitation', 'pearls'],
+    createdAt: Date.now() - 86400000 * 3,
+    updatedAt: Date.now() - 86400000 * 1,
+  },
+  {
+    id: 'note-chest-pain-pearls',
+    title: 'Acute Chest Pain Differential: The 6 Killers',
+    content: `# The 6 Deadly Causes of Acute Chest Pain
+
+When evaluating acute chest pain in the ER or on the wards, rule out these six lethal conditions systematically:
+
+1. **Acute Coronary Syndrome (STEMI / NSTEMI / Unstable Angina)**
+   - Check immediate 12-lead ECG (< 10 min)
+   - Baseline and serial High-Sensitivity Troponin at 0h, 1h/3h
+2. **Aortic Dissection**
+   - Tearing back/chest pain, pulse deficit, asymmetric BP (>20 mmHg)
+   - Immediate CTA chest/abdomen if suspected; avoid anticoagulants!
+3. **Pulmonary Embolism**
+   - Wells score, PERC rule, D-dimer vs CTA PE protocol
+4. **Tension Pneumothorax**
+   - Unilateral absent breath sounds, tracheal deviation, hemodynamic collapse
+   - Immediate needle decompression before CXR if in shock
+5. **Cardiac Tamponade**
+   - Beck's triad (hypotension, JVD, muffled heart sounds), electrical alternans
+   - Bedside echocardiography (POCUS)
+6. **Esophageal Rupture (Boerhaave Syndrome)**
+   - Severe retrosternal pain post-retching, subcutaneous emphysema, Hamman crunch
+
+---
+
+### Linked Clinical Checklists
+- [Checklist: Constitutional & General ROS](checklist://chk-ros-general)
+- [Template: Acute Chest Pain & ACS Protocol](template://tmpl-chest-pain)
+`,
+    facility: 'St. Jude Medical Center',
+    ward: 'Emergency',
+    tags: ['cardiology', 'emergency', 'chest-pain', 'diagnostics'],
+    createdAt: Date.now() - 86400000 * 5,
+    updatedAt: Date.now() - 86400000 * 2,
+  },
+];

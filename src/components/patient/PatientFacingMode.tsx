@@ -553,6 +553,7 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
               panY={0}
               zoom={1}
               penOnlyMode={penOnlyMode}
+              className="absolute inset-0 z-20 pointer-events-auto"
             />
           )}
 
@@ -621,8 +622,9 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
                             {sec.items.map((item, itemIdx) => (
                               <div
                                 key={item.id}
-                                onClick={() => !isPenMode && handleToggleItem(chkIdx, secIdx, itemIdx)}
-                                className={`p-2.5 rounded-xl border text-xs transition-colors flex items-start gap-2.5 select-text ${
+                                data-checklist-item="true"
+                                onClick={() => handleToggleItem(chkIdx, secIdx, itemIdx)}
+                                className={`p-2.5 rounded-xl border text-xs transition-colors flex items-start gap-2.5 select-text cursor-pointer ${
                                   item.checked
                                     ? 'bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800'
                                     : 'bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-700'
@@ -630,6 +632,7 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
                               >
                                 <input
                                   type="checkbox"
+                                  data-checklist-item="true"
                                   checked={item.checked}
                                   onChange={() => handleToggleItem(chkIdx, secIdx, itemIdx)}
                                   className="mt-0.5 rounded text-emerald-600 cursor-pointer pointer-events-auto"

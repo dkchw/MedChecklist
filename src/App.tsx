@@ -18,6 +18,7 @@ import { PatientFacingMode } from './components/patient/PatientFacingMode';
 import { NewPatientModal } from './components/patient/NewPatientModal';
 import { VaultModal } from './components/security/VaultModal';
 import { ImageGalleryModal } from './components/patient/ImageGalleryModal';
+import { KnowledgeHubView } from './components/knowledge/KnowledgeHubView';
 import { P2PSyncService } from './utils/p2pSync';
 import { cryptoVault } from './utils/cryptoVault';
 import { checkForGitHubUpdate, UpdateCheckResult } from './utils/githubUpdater';
@@ -74,7 +75,16 @@ export function App() {
     try {
       const savedTabs = await db.settings.get('workspace_tabs');
       if (savedTabs && savedTabs.value && savedTabs.value.length > 0) {
-        setTabs(savedTabs.value);
+        const hasKnowledge = savedTabs.value.some((t: any) => t.type === 'knowledge');
+        if (!hasKnowledge) {
+          const merged = [
+            ...savedTabs.value,
+            { id: 'tab-knowledge', title: 'Knowledge Hub', type: 'knowledge' as TabType, isClosable: false, order: savedTabs.value.length },
+          ];
+          setTabs(merged);
+        } else {
+          setTabs(savedTabs.value);
+        }
       }
     } catch {}
 
@@ -165,17 +175,23 @@ export function App() {
   // Folder Management Handlers
   const handleCreateFolder = async (
     name: string,
-    type: 'patient' | 'checklist' | 'template',
-    color?: string
+    type: FolderItem['type'],
+    color?: string,
+    parentId?: string,
+    facilityName?: string,
+    wardName?: string
   ) => {
-    const newFolder: any = {
+    const newFolder: FolderItem = {
       id: 'fld-' + Date.now(),
       name,
       type,
       color: color || '#6366f1',
+      parentId,
+      facilityName,
+      wardName,
       order: folders.length,
     };
-    await db.folders.put(newFolder);
+    await db.folders.put(newFolder as any);
     await refreshData();
   };
 
@@ -471,6 +487,19 @@ export function App() {
             onDeleteTemplate={handleDeleteClinicalTemplate}
             onApplyTemplateToPatient={handleApplyClinicalTemplateToPatient}
           />
+        )}
+
+        {activeTab.type === 'knowledge' && (
+          <div className="max-w-7xl mx-auto p-4 sm:p-6">
+            <KnowledgeHubView
+              checklists={checklists}
+              templates={clinicalTemplates}
+              folders={folders}
+              onOpenChecklistReader={(chk) => {
+                setEditingChecklist(chk);
+              }}
+            />
+          </div>
         )}
 
         {activeTab.type === 'gallery' && (
