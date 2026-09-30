@@ -36,9 +36,14 @@ import {
   Keyboard,
   Pen,
   FileDown,
+  HelpCircle,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AttachModal } from '../common/AttachModal';
+import { ClinicalRecallModal } from '../common/ClinicalRecallModal';
+import { PenCanvas } from '../pen/PenCanvas';
+import { HandwritingOcrService } from '../../utils/handwritingOcr';
+import { PenTool as PenToolType } from '../../types/ink';
 
 interface PatientEncounterViewProps {
   encounters: PatientEncounter[];
@@ -79,10 +84,31 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
     onAccept: (val: string) => void;
   } | null>(null);
 
-  // Group & Status Filtering state
+  // Facility & Group & Status Filtering state
   const [statusFilter, setStatusFilter] = useState<'active' | 'archived'>('active');
+  const [selectedFacilityFilter, setSelectedFacilityFilter] = useState<string>('all');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all');
+  const [isEditingFacility, setIsEditingFacility] = useState<boolean>(false);
   const [isEditingGroup, setIsEditingGroup] = useState<boolean>(false);
+
+  // Clinical Recall Popover state
+  const [activeRecall, setActiveRecall] = useState<{
+    title: string;
+    subtitle?: string;
+    category?: string;
+    rationale?: string;
+    normalRange?: string;
+    isRedFlag?: boolean;
+    personalNotes?: string;
+    onSaveNotes?: (notes: string) => void;
+  } | null>(null);
+
+  // End Note 3 Modes state: 'text' | 'handwriting' | 'convert'
+  const [endNoteMode, setEndNoteMode] = useState<'text' | 'handwriting' | 'convert'>('text');
+  const [endNoteTool, setEndNoteTool] = useState<PenToolType>('pen');
+  const [endNoteColor, setEndNoteColor] = useState<string>('#0f172a');
+  const [endNoteSize, setEndNoteSize] = useState<number>(3);
+  const [endNotePenOnly, setEndNotePenOnly] = useState<boolean>(true);
 
   // Patient Tagging state
   const [showAddTag, setShowAddTag] = useState<boolean>(false);
@@ -104,6 +130,15 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
   const [copiedDefault, setCopiedDefault] = useState<boolean>(false);
   const [activeNoteItemId, setActiveNoteItemId] = useState<string | null>(null);
 
+  // Extract unique facilities (Hospitals / Clinics)
+  const availableFacilities = Array.from(
+    new Set(
+      encounters
+        .filter((e) => !e.isDeleted && e.facility)
+        .map((e) => e.facility!)
+    )
+  );
+
   // Extract unique patient groups / wards
   const availableGroups = Array.from(
     new Set(
@@ -113,11 +148,12 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
     )
   );
 
-  // Filter encounters by status (active vs archived) and ward group
+  // Filter encounters by status (active vs archived), facility, and ward group
   const visibleEncounters = encounters.filter((e) => {
     if (e.isDeleted) return false;
     const itemStatus = e.status || 'active';
     if (itemStatus !== statusFilter) return false;
+    if (selectedFacilityFilter !== 'all' && e.facility !== selectedFacilityFilter) return false;
     if (selectedGroupFilter !== 'all' && e.group !== selectedGroupFilter) return false;
     return true;
   });
@@ -163,6 +199,18 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
     };
     onUpdateEncounter(updated);
     setIsEditingGroup(false);
+  };
+
+  // Update patient facility (Hospital / Clinic)
+  const handleUpdateFacility = (newFac: string) => {
+    if (!currentEncounter) return;
+    const updated: PatientEncounter = {
+      ...currentEncounter,
+      facility: newFac.trim() || undefined,
+      updatedAt: Date.now(),
+    };
+    onUpdateEncounter(updated);
+    setIsEditingFacility(false);
   };
 
   // Patient Tagging Handlers
@@ -434,9 +482,42 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
         </div>
       </div>
 
+      {/* Hospital / Clinic (Facility) Filter Pills */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+        <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mr-1 flex items-center gap-1">
+          <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+          <span>Facility:</span>
+        </span>
+
+        <button
+          onClick={() => setSelectedFacilityFilter('all')}
+          className={`px-3 py-1 rounded-lg font-medium transition-colors shrink-0 ${
+            selectedFacilityFilter === 'all'
+              ? 'bg-slate-900 dark:bg-indigo-600 text-white font-semibold shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
+          }`}
+        >
+          All Facilities ({encounters.filter((e) => !e.isDeleted && (e.status || 'active') === statusFilter).length})
+        </button>
+
+        {availableFacilities.map((fac) => (
+          <button
+            key={fac}
+            onClick={() => setSelectedFacilityFilter(fac)}
+            className={`px-3 py-1 rounded-lg font-medium transition-colors shrink-0 ${
+              selectedFacilityFilter === fac
+                ? 'bg-slate-900 dark:bg-indigo-600 text-white font-semibold shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
+            }`}
+          >
+            {fac} ({encounters.filter((e) => !e.isDeleted && e.facility === fac && (e.status || 'active') === statusFilter).length})
+          </button>
+        ))}
+      </div>
+
       {/* Ward Filter Pills */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-        <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mr-1 flex items-center gap-1">
+        <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mr-1 flex items-center gap-1">
           <Folder className="w-3 h-3 text-indigo-500" />
           <span>Wards:</span>
         </span>
@@ -445,8 +526,8 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
           onClick={() => setSelectedGroupFilter('all')}
           className={`px-3 py-1 rounded-lg font-medium transition-colors shrink-0 ${
             selectedGroupFilter === 'all'
-              ? 'bg-slate-900 dark:bg-indigo-600 text-white font-semibold'
-              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+              ? 'bg-slate-900 dark:bg-indigo-600 text-white font-semibold shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
           }`}
         >
           All Wards / Units
@@ -458,8 +539,8 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
             onClick={() => setSelectedGroupFilter(grp)}
             className={`px-3 py-1 rounded-lg font-medium transition-colors shrink-0 ${
               selectedGroupFilter === grp
-                ? 'bg-slate-900 dark:bg-indigo-600 text-white font-semibold'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                ? 'bg-slate-900 dark:bg-indigo-600 text-white font-semibold shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
             }`}
           >
             {grp} ({encounters.filter((e) => !e.isDeleted && e.group === grp && (e.status || 'active') === statusFilter).length})
@@ -542,6 +623,38 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                     Bed {currentEncounter.bedNumber}
                   </span>
                 )}
+
+                {/* Hospital / Clinic (Facility) Tag with quick click-to-edit */}
+                <div className="relative inline-flex items-center">
+                  {isEditingFacility ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        defaultValue={currentEncounter.facility || ''}
+                        placeholder="Enter Hospital / Clinic..."
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleUpdateFacility((e.target as HTMLInputElement).value);
+                          } else if (e.key === 'Escape') {
+                            setIsEditingFacility(false);
+                          }
+                        }}
+                        onBlur={(e) => handleUpdateFacility(e.target.value)}
+                        autoFocus
+                        className="text-xs px-2 py-0.5 border border-indigo-400 dark:border-indigo-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setIsEditingFacility(true)}
+                      className="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-medium px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition-colors"
+                      title="Click to edit Hospital / Clinic"
+                    >
+                      <Building2 className="w-3 h-3 text-indigo-500" />
+                      <span>{currentEncounter.facility || 'Assign Facility'}</span>
+                    </button>
+                  )}
+                </div>
 
                 {/* Ward / Group Tag with quick click-to-edit */}
                 <div className="relative inline-flex items-center">
@@ -975,6 +1088,23 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* Clinical Recall / Guidance button */}
+                    <button
+                      onClick={() =>
+                        setActiveRecall({
+                          title: chk.title,
+                          subtitle: chk.institution ? `Institution: ${chk.institution}` : undefined,
+                          category: 'Checklist Protocol',
+                          rationale: 'Review clinical criteria, diagnostic indications, and protocol guidelines.',
+                        })
+                      }
+                      className="text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors"
+                      title="Clinical Recall & Guideline Protocol"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Recall</span>
+                    </button>
+
                     {/* Quick Copy / Duplicate Checklist Button */}
                     <button
                       onClick={() => handleDuplicateChecklist(chk)}
@@ -1053,6 +1183,26 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
                                   <Star
                                     className={`w-3.5 h-3.5 ${item.starred ? 'fill-current' : ''}`}
                                   />
+                                </button>
+
+                                {/* Clinical Recall & Personal Notes Question Mark */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setActiveRecall({
+                                      title: item.text,
+                                      subtitle: item.referenceValue ? `Reference Range: ${item.referenceValue}` : undefined,
+                                      category: sec.title,
+                                      normalRange: item.referenceValue,
+                                      isRedFlag: item.starred,
+                                      personalNotes: item.note,
+                                      onSaveNotes: (notes) => handleUpdateItemNote(chkIdx, secIdx, itmIdx, notes),
+                                    })
+                                  }
+                                  className="p-0.5 rounded text-slate-400 hover:text-indigo-600 dark:text-slate-500 dark:hover:text-indigo-400 transition-colors"
+                                  title="Clinical Recall & Notes"
+                                >
+                                  <HelpCircle className="w-3.5 h-3.5" />
                                 </button>
                               </div>
 
@@ -1214,36 +1364,292 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
               </div>
             ))}
 
-            {/* Bedside Notes Section */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-3 transition-colors">
-              <div className="flex items-center justify-between">
+            {/* Bedside Notes Section with 3 Modes: Text Only | Handwriting Only | Handwriting & Convert */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4 transition-colors">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                   <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
-                    Bedside & Handwritten Notes (Editable Markdown)
+                    Bedside & Clinical Notes
                   </h3>
                 </div>
-                {currentEncounter.inkStrokes && currentEncounter.inkStrokes.length > 0 && (
-                  <span className="text-[11px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded font-medium flex items-center gap-1 border border-indigo-100 dark:border-indigo-900/50">
-                    <PenTool className="w-3 h-3" />
-                    <span>{currentEncounter.inkStrokes.length} Stylus Strokes Saved</span>
-                  </span>
-                )}
+
+                {/* 3 Mode Switcher */}
+                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <button
+                    onClick={() => setEndNoteMode('text')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                      endNoteMode === 'text'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Keyboard className="w-3.5 h-3.5" />
+                    <span>Text Only</span>
+                  </button>
+
+                  <button
+                    onClick={() => setEndNoteMode('handwriting')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                      endNoteMode === 'handwriting'
+                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Pen className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Handwriting Only</span>
+                  </button>
+
+                  <button
+                    onClick={() => setEndNoteMode('convert')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                      endNoteMode === 'convert'
+                        ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Handwriting & Convert</span>
+                  </button>
+                </div>
               </div>
 
-              <textarea
-                rows={4}
-                value={currentEncounter.generalNotes || ''}
-                onChange={(e) =>
-                  onUpdateEncounter({
-                    ...currentEncounter,
-                    generalNotes: e.target.value,
-                    updatedAt: Date.now(),
-                  })
-                }
-                placeholder="Write clinical synthesis, differential diagnoses, or bedside observations here in Markdown...&#10;- Sublingual nitro administered&#10;- Serial ECG scheduled"
-                className="w-full text-xs font-mono p-3 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-indigo-500 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
-              />
+              {/* Mode 1: Text Only (Markdown textarea) */}
+              {endNoteMode === 'text' && (
+                <div className="space-y-2">
+                  <textarea
+                    rows={5}
+                    value={currentEncounter.generalNotes || ''}
+                    onChange={(e) =>
+                      onUpdateEncounter({
+                        ...currentEncounter,
+                        generalNotes: e.target.value,
+                        updatedAt: Date.now(),
+                      })
+                    }
+                    placeholder="Write clinical synthesis, differential diagnoses, or bedside observations here in Markdown...&#10;- Sublingual nitro administered&#10;- Serial ECG scheduled"
+                    className="w-full text-xs font-mono p-3 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-indigo-500 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                  />
+                  <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center justify-between">
+                    <span>Supports GitHub Flavored Markdown (headings, bullet points, checklists).</span>
+                    {currentEncounter.bedsideInkStrokes && currentEncounter.bedsideInkStrokes.length > 0 && (
+                      <span className="text-indigo-600 dark:text-indigo-400">
+                        {currentEncounter.bedsideInkStrokes.length} handwriting strokes saved in background
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Mode 2: Handwriting Only */}
+              {endNoteMode === 'handwriting' && (
+                <div className="space-y-2">
+                  {/* Canvas Toolbar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setEndNoteTool('pen')}
+                        className={`p-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors ${
+                          endNoteTool === 'pen'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                        }`}
+                        title="Pen with Pressure Sensitivity"
+                      >
+                        <PenTool className="w-3.5 h-3.5" />
+                        <span>Pen</span>
+                      </button>
+
+                      <button
+                        onClick={() => setEndNoteTool('highlighter')}
+                        className={`p-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors ${
+                          endNoteTool === 'highlighter'
+                            ? 'bg-amber-500 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                        }`}
+                        title="Highlighter"
+                      >
+                        <span>Highlighter</span>
+                      </button>
+
+                      <button
+                        onClick={() => setEndNoteTool('eraser')}
+                        className={`p-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors ${
+                          endNoteTool === 'eraser'
+                            ? 'bg-rose-600 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                        }`}
+                        title="Eraser"
+                      >
+                        <span>Eraser</span>
+                      </button>
+
+                      <button
+                        onClick={() => setEndNoteTool('selector')}
+                        className={`p-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors ${
+                          endNoteTool === 'selector'
+                            ? 'bg-purple-600 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                        }`}
+                        title="Lasso Selector (Irregular Freehand)"
+                      >
+                        <span>Lasso</span>
+                      </button>
+                    </div>
+
+                    {/* Colors & Palm Rejection Toggle */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        {['#0f172a', '#2563eb', '#dc2626', '#16a34a', '#d97706'].map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => setEndNoteColor(c)}
+                            style={{ backgroundColor: c }}
+                            className={`w-5 h-5 rounded-full border-2 transition-transform ${
+                              endNoteColor === c ? 'scale-125 border-indigo-500' : 'border-white dark:border-slate-900'
+                            }`}
+                          />
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => setEndNotePenOnly(!endNotePenOnly)}
+                        className={`px-2 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 border transition-colors ${
+                          endNotePenOnly
+                            ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                        }`}
+                        title="Palm Rejection: Ignore touch when using hardware stylus"
+                      >
+                        <span>{endNotePenOnly ? 'Pen Only (Palm Guard)' : 'Pen & Touch'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          onUpdateEncounter({
+                            ...currentEncounter,
+                            bedsideInkStrokes: [],
+                            updatedAt: Date.now(),
+                          });
+                        }}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40 transition-colors"
+                        title="Clear all handwriting strokes"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* PenCanvas Drawing Area */}
+                  <div className="w-full h-72 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 relative overflow-hidden shadow-inner">
+                    <PenCanvas
+                      strokes={currentEncounter.bedsideInkStrokes || []}
+                      onChangeStrokes={(newStrokes) => {
+                        onUpdateEncounter({
+                          ...currentEncounter,
+                          bedsideInkStrokes: newStrokes,
+                          updatedAt: Date.now(),
+                        });
+                      }}
+                      tool={endNoteTool}
+                      color={endNoteColor}
+                      size={endNoteSize}
+                      penOnlyMode={endNotePenOnly}
+                      className="w-full h-full"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Mode 3: Handwriting and Convert to Text */}
+              {endNoteMode === 'convert' && (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>Write note with stylus, then transcribe into Markdown</span>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          const strokes = currentEncounter.bedsideInkStrokes || [];
+                          if (strokes.length === 0) return;
+                          const res = HandwritingOcrService.recognizeStrokes(strokes);
+                          if (res.text) {
+                            const prevNotes = currentEncounter.generalNotes ? currentEncounter.generalNotes + '\n' : '';
+                            onUpdateEncounter({
+                              ...currentEncounter,
+                              generalNotes: prevNotes + res.text,
+                              updatedAt: Date.now(),
+                            });
+                          }
+                        }}
+                        disabled={!(currentEncounter.bedsideInkStrokes && currentEncounter.bedsideInkStrokes.length > 0)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white flex items-center gap-1.5 shadow-xs transition-colors"
+                        title="Transcribe handwritten strokes into Markdown note"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Transcribe Ink to Text</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          onUpdateEncounter({
+                            ...currentEncounter,
+                            bedsideInkStrokes: [],
+                            updatedAt: Date.now(),
+                          });
+                        }}
+                        className="px-2 py-1 rounded-lg text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40"
+                      >
+                        Clear Ink
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Canvas */}
+                  <div className="w-full h-48 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 relative overflow-hidden shadow-inner">
+                    <PenCanvas
+                      strokes={currentEncounter.bedsideInkStrokes || []}
+                      onChangeStrokes={(newStrokes) => {
+                        onUpdateEncounter({
+                          ...currentEncounter,
+                          bedsideInkStrokes: newStrokes,
+                          updatedAt: Date.now(),
+                        });
+                      }}
+                      tool={endNoteTool}
+                      color={endNoteColor}
+                      size={endNoteSize}
+                      penOnlyMode={endNotePenOnly}
+                      className="w-full h-full"
+                    />
+                  </div>
+
+                  {/* Transcribed Markdown Textarea */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                      Transcribed Clinical Markdown Notes:
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={currentEncounter.generalNotes || ''}
+                      onChange={(e) =>
+                        onUpdateEncounter({
+                          ...currentEncounter,
+                          generalNotes: e.target.value,
+                          updatedAt: Date.now(),
+                        })
+                      }
+                      placeholder="Transcribed text will appear here. You can also edit it directly..."
+                      className="w-full text-xs font-mono p-2.5 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-indigo-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </>
@@ -1278,6 +1684,21 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Clinical Recall Modal */}
+      {activeRecall && (
+        <ClinicalRecallModal
+          title={activeRecall.title}
+          subtitle={activeRecall.subtitle}
+          category={activeRecall.category}
+          rationale={activeRecall.rationale}
+          normalRange={activeRecall.normalRange}
+          isRedFlag={activeRecall.isRedFlag}
+          personalNotes={activeRecall.personalNotes}
+          onSavePersonalNotes={activeRecall.onSaveNotes}
+          onClose={() => setActiveRecall(null)}
+        />
       )}
     </div>
   );

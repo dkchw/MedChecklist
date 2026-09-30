@@ -1,5 +1,15 @@
 import React from 'react';
-import { Pen, Highlighter, Eraser, MousePointer, RotateCcw, RotateCw, Trash2, Check } from 'lucide-react';
+import {
+  Pen,
+  Highlighter,
+  Eraser,
+  MousePointer,
+  RotateCcw,
+  RotateCw,
+  Trash2,
+  Check,
+  ShieldCheck,
+} from 'lucide-react';
 import { PenTool, PRESET_PEN_COLORS, PRESET_STROKE_SIZES } from '../../types/ink';
 
 interface PenToolbarProps {
@@ -15,6 +25,8 @@ interface PenToolbarProps {
   onRedo: () => void;
   onClear: () => void;
   onClose: () => void;
+  penOnlyMode?: boolean;
+  onTogglePenOnlyMode?: () => void;
 }
 
 export const PenToolbar: React.FC<PenToolbarProps> = ({
@@ -30,6 +42,8 @@ export const PenToolbar: React.FC<PenToolbarProps> = ({
   onRedo,
   onClear,
   onClose,
+  penOnlyMode = false,
+  onTogglePenOnlyMode,
 }) => {
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-2xl rounded-2xl p-2.5 flex items-center gap-3 transition-all duration-200 flex-wrap justify-center">
@@ -87,6 +101,27 @@ export const PenToolbar: React.FC<PenToolbarProps> = ({
           <span>Select & Move</span>
         </button>
       </div>
+
+      {/* Stylus / Palm Rejection Guard Toggle */}
+      {onTogglePenOnlyMode && (
+        <button
+          type="button"
+          onClick={onTogglePenOnlyMode}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+            penOnlyMode
+              ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+          }`}
+          title={
+            penOnlyMode
+              ? 'Stylus Only Mode (Palm Rejection Active - Finger touches ignored)'
+              : 'Touch + Stylus Mode (Click to enable Stylus Only with Palm Rejection)'
+          }
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>{penOnlyMode ? 'Pen Only (Palm Guard)' : 'Touch & Pen'}</span>
+        </button>
+      )}
 
       <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
 

@@ -13,7 +13,8 @@ export interface EncounterChecklistInstance {
 export interface PatientEncounter {
   id: string;
   patientIdentifier: string; // e.g. "Bed 4 - Smith, J." or "Pt #8832"
-  group?: string;            // Patient group / ward / room block e.g. "ICU", "Cardiology Ward", "Emergency"
+  facility?: string;         // Hospital / Clinic / Medical Center e.g. "City General", "St. Jude Clinic"
+  group?: string;            // Patient ward / room block / department e.g. "ICU", "Cardiology Ward", "Emergency"
   folderId?: string;         // Folder classification ID
   age?: string;
   sex?: 'M' | 'F' | 'Other';
@@ -26,7 +27,8 @@ export interface PatientEncounter {
   templateTitle?: string;    // Name of template used (e.g. "Acute Coronary Syndrome Admission")
   checklists: EncounterChecklistInstance[]; // Modular checklists attached to this patient
   generalNotes?: string;     // Editable Markdown clinical notes / SOAP / instructions
-  inkStrokes?: InkStroke[];  // Bedside handwritten notes and pen drawings
+  inkStrokes?: InkStroke[];  // Bedside handwritten notes and pen drawings (full mode)
+  bedsideInkStrokes?: InkStroke[]; // Dedicated handwriting strokes for end-of-dossier note
   images?: MedicalImage[];   // Attached clinical images (ECG, rashes, wounds, labs)
   links?: MedicalLink[];     // Attached reference links (UpToDate, PubMed, Guidelines)
   tags: string[];

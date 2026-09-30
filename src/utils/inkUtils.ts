@@ -21,14 +21,29 @@ export function drawStrokeOnCanvas(
 ) {
   if (!stroke.points || stroke.points.length === 0) return;
 
-  const points = stroke.points.map(p => [p.x * scale, p.y * scale, p.pressure ?? 0.5]);
+  const hasHardwarePressure = stroke.points.some(
+    (p) => p.pressure !== undefined && p.pressure > 0 && p.pressure !== 0.5
+  );
+
+  const points = stroke.points.map((p) => {
+    const pres = p.pressure && p.pressure > 0 ? Math.max(0.12, Math.min(1.0, p.pressure)) : 0.5;
+    return [p.x * scale, p.y * scale, pres];
+  });
 
   const outline = getStroke(points, {
     size: stroke.size * scale,
-    thinning: stroke.tool === 'highlighter' ? 0 : 0.45,
-    smoothing: 0.6,
-    streamline: 0.5,
-    simulatePressure: false,
+    thinning: stroke.tool === 'highlighter' ? 0 : 0.6,
+    smoothing: 0.72,
+    streamline: 0.58,
+    simulatePressure: !hasHardwarePressure,
+    start: {
+      taper: stroke.tool === 'highlighter' ? 0 : stroke.size * scale * 0.4,
+      cap: true,
+    },
+    end: {
+      taper: stroke.tool === 'highlighter' ? 0 : stroke.size * scale * 0.4,
+      cap: true,
+    },
   });
 
   const pathData = getSvgPathFromStroke(outline);
@@ -65,4 +80,49 @@ export function isPointNearStroke(
     }
   }
   return false;
+}
+
+/**
+ * Point-in-polygon ray casting algorithm for irregular freehand lasso selection
+ */
+export function isPointInPolygon(
+  point: { x: number; y: number },
+  polygon: { x: number; y: number }[]
+): boolean {
+  if (polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+
+    const intersect =
+      yi > point.y !== yj > point.y &&
+      point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Checks if a stroke is enclosed or intersects an irregular lasso polygon
+ */
+export function isStrokeInPolygon(
+  stroke: InkStroke,
+  polygon: { x: number; y: number }[]
+): boolean {
+  if (polygon.length < 3 || !stroke.points || stroke.points.length === 0) return false;
+
+  // Check if any point of the stroke is inside the polygon
+  for (const pt of stroke.points) {
+    if (isPointInPolygon(pt, polygon)) {
+      return true;
+    }
+  }
+
+  // Also check average center point
+  const avgX = stroke.points.reduce((sum, p) => sum + p.x, 0) / stroke.points.length;
+  const avgY = stroke.points.reduce((sum, p) => sum + p.y, 0) / stroke.points.length;
+  return isPointInPolygon({ x: avgX, y: avgY }, polygon);
 }

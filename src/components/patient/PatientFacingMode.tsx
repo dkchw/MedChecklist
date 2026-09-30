@@ -54,8 +54,8 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
   const [undoStack, setUndoStack] = useState<InkStroke[][]>([]);
   const [redoStack, setRedoStack] = useState<InkStroke[][]>([]);
 
-  // Multi-page state
   const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
+  const [penOnlyMode, setPenOnlyMode] = useState<boolean>(true);
   const pagesCount = encounter.pagesCount || 1;
 
   // 4-Direction Pan & Zoom state
@@ -524,6 +524,7 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
               panX={0}
               panY={0}
               zoom={1}
+              penOnlyMode={penOnlyMode}
             />
           )}
 
@@ -699,6 +700,8 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
           onRedo={handleRedo}
           onClear={handleClearStrokes}
           onClose={() => setIsPenMode(false)}
+          penOnlyMode={penOnlyMode}
+          onTogglePenOnlyMode={() => setPenOnlyMode(!penOnlyMode)}
         />
       )}
     </div>

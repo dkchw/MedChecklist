@@ -219,15 +219,54 @@ export class HandwritingOcrService {
     // 3. Rasterize strokes into a 16x16 binary grid
     const grid16 = this.rasterizeToGrid16(glyph);
 
-    // 4. Compare against prototypes using Jaccard Similarity / Hamming Distance
+    // 4. Feature Extraction: bottom base, top arc, center density
+    let maxBottomSpan = 0;
+    for (let r = 13; r <= 15; r++) {
+      const row = grid16[r] || 0;
+      let minC = 16, maxC = -1;
+      for (let c = 0; c < 16; c++) {
+        if ((row & (1 << (15 - c))) !== 0) {
+          if (c < minC) minC = c;
+          if (c > maxC) maxC = c;
+        }
+      }
+      if (maxC >= minC) {
+        maxBottomSpan = Math.max(maxBottomSpan, maxC - minC + 1);
+      }
+    }
+    const hasWideBottomBase = maxBottomSpan >= 7;
+
+    let topHasLeft = false, topHasRight = false;
+    for (let r = 0; r <= 4; r++) {
+      const row = grid16[r] || 0;
+      if (row & 0xfe00) topHasLeft = true;
+      if (row & 0x01fe) topHasRight = true;
+    }
+    const hasTopArc = topHasLeft && topHasRight;
+
+    // 5. Compare against prototypes using Jaccard Similarity + Feature Boosters
     let bestChar = '0';
     let bestSimilarity = -1;
 
     for (const [char, proto] of Object.entries(DIGIT_PROTOTYPES)) {
       const sim = this.computeGridSimilarity(grid16, proto);
-
-      // Heuristic boosters based on stroke geometry
       let adjustedSim = sim;
+
+      // Digit '2' detection: curved top + wide horizontal base
+      if (char === '2') {
+        if (hasWideBottomBase) adjustedSim += 0.25;
+        if (hasTopArc && hasWideBottomBase) adjustedSim += 0.15;
+      }
+
+      // Digit '1' detection: tall, narrow, and must NOT have wide base or curved top arc
+      if (char === '1') {
+        if (aspectRatio < 0.38 && !hasWideBottomBase && !hasTopArc) {
+          adjustedSim += 0.22;
+        } else if (hasWideBottomBase || hasTopArc) {
+          // Strong penalty if someone wrote a digit with a wide base or curve like '2'
+          adjustedSim -= 0.3;
+        }
+      }
 
       // Slash '/' should be tilted: starts top-right, ends bottom-left (or vice versa)
       if (char === '/') {
@@ -236,15 +275,20 @@ export class HandwritingOcrService {
           if (firstStroke && firstStroke.points.length >= 2) {
             const startP = firstStroke.points[0];
             const endP = firstStroke.points[firstStroke.points.length - 1];
-            const isForwardSlash = (startP.x < endP.x && startP.y > endP.y) || (startP.x > endP.x && startP.y < endP.y);
-            if (isForwardSlash) adjustedSim += 0.15;
+            const isForwardSlash =
+              (startP.x < endP.x && startP.y > endP.y) ||
+              (startP.x > endP.x && startP.y < endP.y);
+            if (isForwardSlash) adjustedSim += 0.2;
           }
         }
       }
 
-      // '1' is typically tall and narrow
-      if (char === '1' && aspectRatio < 0.45) {
-        adjustedSim += 0.2;
+      // Digit '0' detection: loop with empty/lower center
+      if (char === '0') {
+        const centerBits = (grid16[7] & 0x0180) + (grid16[8] & 0x0180);
+        if (centerBits === 0 && hasTopArc && hasWideBottomBase) {
+          adjustedSim += 0.12;
+        }
       }
 
       if (adjustedSim > bestSimilarity) {

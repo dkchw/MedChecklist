@@ -13,7 +13,11 @@ import {
   ClipboardCheck,
   FileText,
   Search,
+  Eye,
+  HelpCircle,
 } from 'lucide-react';
+import { TemplateReaderModal } from './TemplateReaderModal';
+import { ClinicalRecallModal } from '../common/ClinicalRecallModal';
 
 interface TemplateManagerViewProps {
   templates: ClinicalTemplate[];
@@ -38,6 +42,13 @@ export const TemplateManagerView: React.FC<TemplateManagerViewProps> = ({
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [readingTemplate, setReadingTemplate] = useState<ClinicalTemplate | null>(null);
+  const [activeRecall, setActiveRecall] = useState<{
+    title: string;
+    subtitle?: string;
+    category?: string;
+    rationale?: string;
+  } | null>(null);
 
   // Categories
   const categories = Array.from(
@@ -101,21 +112,39 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
         <div>
           {/* Header */}
           <div className="flex items-start justify-between gap-2 mb-2">
-            <div className="flex-1">
+            <div className="flex-1 cursor-pointer" onClick={() => setReadingTemplate(t)}>
               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md border border-indigo-100/50 dark:border-indigo-900/50">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-800 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800">
                   {t.category || 'General'}
                 </span>
                 {t.institution && (
-                  <span className="text-[10px] font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md flex items-center gap-1">
+                  <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md flex items-center gap-1 border border-slate-200 dark:border-slate-700">
                     <Building2 className="w-3 h-3" />
                     <span>{t.institution}</span>
                   </span>
                 )}
               </div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                {t.title}
-              </h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  {t.title}
+                </h3>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveRecall({
+                      title: t.title,
+                      subtitle: t.description,
+                      category: t.category,
+                      rationale: t.protocolNotes || 'Bundled clinical protocol directives.',
+                    });
+                  }}
+                  className="p-1 text-slate-500 hover:text-indigo-600 dark:text-slate-300 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  title="Clinical Recall Note"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             <button
@@ -123,7 +152,7 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
               className={`p-1.5 rounded-lg transition-colors ${
                 t.isPinned
                   ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/50'
-                  : 'text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300'
+                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
               }`}
               title={t.isPinned ? 'Unpin' : 'Pin to top'}
             >
@@ -133,14 +162,17 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
 
           {/* Description */}
           {t.description && (
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
+            <p
+              onClick={() => setReadingTemplate(t)}
+              className="text-xs text-slate-600 dark:text-slate-300 mb-3 line-clamp-2 cursor-pointer"
+            >
               {t.description}
             </p>
           )}
 
           {/* Bundled Checklists list */}
-          <div className="mb-3">
-            <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+          <div className="mb-3 cursor-pointer" onClick={() => setReadingTemplate(t)}>
+            <div className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1">
               <ClipboardCheck className="w-3.5 h-3.5 text-indigo-500" />
               <span>Bundled Checklists ({bundledChecklists.length}):</span>
             </div>
@@ -149,7 +181,7 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
                 bundledChecklists.map((bc) => (
                   <span
                     key={bc.id}
-                    className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-md font-medium border border-slate-200 dark:border-slate-700"
+                    className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded-md font-semibold border border-slate-200 dark:border-slate-700"
                   >
                     {bc.title}
                   </span>
@@ -162,8 +194,11 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
 
           {/* Protocol notes preview */}
           {t.protocolNotes && (
-            <div className="mb-3 p-2 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400">
-              <div className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300 mb-0.5">
+            <div
+              onClick={() => setReadingTemplate(t)}
+              className="mb-3 p-2 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700/80 text-[11px] text-slate-700 dark:text-slate-300 cursor-pointer"
+            >
+              <div className="flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 mb-0.5">
                 <FileText className="w-3 h-3 text-indigo-500" />
                 <span>Protocol Guidance:</span>
               </div>
@@ -183,8 +218,8 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
                   }}
                   className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
                     selectedTag === tag
-                      ? 'bg-indigo-600 text-white font-medium'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      ? 'bg-indigo-600 text-white font-semibold'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700'
                   }`}
                 >
                   #{tag}
@@ -198,15 +233,23 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
         <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1">
           <div className="flex items-center gap-1">
             <button
+              onClick={() => setReadingTemplate(t)}
+              className="p-1.5 text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/60 rounded-lg transition-colors flex items-center gap-1 font-semibold text-xs"
+              title="Read & Run Bundle Interactively"
+            >
+              <Eye className="w-4 h-4" />
+              <span className="hidden sm:inline">Read</span>
+            </button>
+            <button
               onClick={() => onOpenEditor(t)}
-              className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              className="p-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
               title="Edit Template Bundle"
             >
               <Edit className="w-4 h-4" />
             </button>
             <button
               onClick={() => handleCopySummary(t)}
-              className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              className="p-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
               title="Copy Summary Markdown"
             >
               {copiedId === t.id ? (
@@ -359,6 +402,27 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
             </div>
           )}
         </div>
+      )}
+
+      {/* Standalone Interactive Template Bundle Reader */}
+      {readingTemplate && (
+        <TemplateReaderModal
+          template={readingTemplate}
+          availableChecklists={availableChecklists}
+          onClose={() => setReadingTemplate(null)}
+          onApplyTemplateToPatient={onApplyTemplateToPatient}
+        />
+      )}
+
+      {/* Clinical Recall Popover */}
+      {activeRecall && (
+        <ClinicalRecallModal
+          title={activeRecall.title}
+          subtitle={activeRecall.subtitle}
+          category={activeRecall.category}
+          rationale={activeRecall.rationale}
+          onClose={() => setActiveRecall(null)}
+        />
       )}
     </div>
   );
