@@ -16,6 +16,7 @@ import {
   Folder,
   Image as ImageIcon,
   Settings,
+  Pen,
 } from 'lucide-react';
 import appLogo from '../../../assets/app-icon.png';
 import { ThemeMode } from '../../utils/theme';
@@ -38,6 +39,7 @@ interface HeaderProps {
   onToggleTheme: () => void;
   onCheckUpdate?: () => void;
   onOpenSettings?: () => void;
+  onOpenInking?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -55,6 +57,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleTheme,
   onCheckUpdate,
   onOpenSettings,
+  onOpenInking,
 }) => {
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
@@ -104,7 +107,7 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
       </div>
 
-      {/* Active Workspace / Mode Indicator (Prominent & Big) */}
+      {/* Active Workspace / Mode Indicator (Prominent & Big) + Quick Inking Trigger */}
       <div className="flex items-center gap-2 min-w-0">
         <button
           type="button"
@@ -115,6 +118,18 @@ export const Header: React.FC<HeaderProps> = ({
           {getTabIcon(activeTab.type)}
           <span className="truncate tracking-tight">{activeTab.title}</span>
         </button>
+
+        {onOpenInking && (
+          <button
+            type="button"
+            onClick={onOpenInking}
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm shadow-xs cursor-pointer transition-all hover:scale-105 active:scale-95 shrink-0"
+            title="Full Canvas Inking / Bedside Drawing Mode (Quick Switch)"
+          >
+            <Pen className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden xs:inline">Inking</span>
+          </button>
+        )}
       </div>
 
       {/* Right Utility Controls */}

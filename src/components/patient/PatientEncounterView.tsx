@@ -633,7 +633,7 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="w-full max-w-full px-3 sm:px-6 py-4 space-y-5 overflow-x-hidden">
       {/* File Explorer Navigation & Rapid Patient Switcher Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs transition-colors">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -747,8 +747,8 @@ export const PatientEncounterView: React.FC<PatientEncounterViewProps> = ({
       </div>
 
       <div className="lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
-          {/* Left Column: Sticky Patient Profile & Protocol Navigator in Landscape Mode */}
-          <div className="lg:col-span-4 xl:col-span-4 lg:sticky lg:top-20 space-y-4 mb-6 lg:mb-0 max-h-[calc(100vh-5rem)] overflow-y-auto">
+          {/* Left Column: Patient Profile & Protocol Navigator */}
+          <div className="lg:col-span-4 xl:col-span-4 space-y-4 mb-6 lg:mb-0">
             {/* Patient Dossier Card */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs transition-colors space-y-4">
               <div>

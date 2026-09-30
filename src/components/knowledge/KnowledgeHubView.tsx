@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   BookOpen,
   Folder,
@@ -45,6 +45,11 @@ import {
   ArrowUpDown,
   Filter,
   Pen,
+  Palette,
+  ChevronsDown,
+  ChevronsUp,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { KnowledgeNote } from '../../types/knowledge';
 import { Checklist } from '../../types/checklist';
@@ -109,6 +114,150 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renamedFolderName, setRenamedFolderName] = useState('');
   const [activeHandwritingTarget, setActiveHandwritingTarget] = useState<'content' | 'title' | null>(null);
+  const [editingColorFolderId, setEditingColorFolderId] = useState<string | null>(null);
+
+  // High-performance folder adjacency graph (O(1) child lookups)
+  const folderHierarchy = useMemo(() => {
+    const childrenMap = new Map<string, FolderItem[]>();
+    const rootFolders: FolderItem[] = [];
+    for (const f of folders) {
+      if (f.parentId && folders.some((p) => p.id === f.parentId)) {
+        const list = childrenMap.get(f.parentId) || [];
+        list.push(f);
+        childrenMap.set(f.parentId, list);
+      } else {
+        rootFolders.push(f);
+      }
+    }
+    return { childrenMap, rootFolders };
+  }, [folders]);
+
+  // High-performance single-pass O(N) note counts
+  const noteCounts = useMemo(() => {
+    const folderCounts = new Map<string, number>();
+    let totalNotes = 0;
+    let starredCount = 0;
+    let unassignedCount = 0;
+
+    for (let i = 0; i < notes.length; i++) {
+      const n = notes[i];
+      totalNotes++;
+      if (n.isPinned) starredCount++;
+      if (n.folderId) {
+        folderCounts.set(n.folderId, (folderCounts.get(n.folderId) || 0) + 1);
+      } else {
+        unassignedCount++;
+      }
+    }
+    return { folderCounts, totalNotes, starredCount, unassignedCount };
+  }, [notes]);
+
+  // Fast O(V) iterative descendant folder discovery
+  const getDescendantFolderIds = useCallback(
+    (folderId: string): string[] => {
+      const descendants: string[] = [];
+      const queue = [folderId];
+      while (queue.length > 0) {
+        const curr = queue.shift()!;
+        const children = folderHierarchy.childrenMap.get(curr) || [];
+        for (const child of children) {
+          descendants.push(child.id);
+          queue.push(child.id);
+        }
+      }
+      return descendants;
+    },
+    [folderHierarchy.childrenMap]
+  );
+
+  // Fast cumulative count calculation
+  const getCumulativeCount = useCallback(
+    (folderId: string, folderName?: string): number => {
+      let count = noteCounts.folderCounts.get(folderId) || 0;
+      const descendants = getDescendantFolderIds(folderId);
+      for (const dId of descendants) {
+        count += noteCounts.folderCounts.get(dId) || 0;
+      }
+      if (folderName) {
+        const legacyFacility = notes.filter((n) => !n.folderId && n.facility === folderName).length;
+        count += legacyFacility;
+      }
+      return count;
+    },
+    [noteCounts.folderCounts, getDescendantFolderIds, notes]
+  );
+
+  // 4 Precise Folder Expansion & Collapse Actions
+  // 1. Expand all recursively under folder
+  const handleExpandAllRecursively = (folderId: string) => {
+    const all = [folderId, ...getDescendantFolderIds(folderId)];
+    setCollapsedFolderIds((prev) => {
+      const next = { ...prev };
+      for (const id of all) {
+        delete next[id];
+      }
+      return next;
+    });
+  };
+
+  // 2. Expand 1 layer under folder
+  const handleExpandOneLayer = (folderId: string) => {
+    const children = folderHierarchy.childrenMap.get(folderId) || [];
+    setCollapsedFolderIds((prev) => {
+      const next = { ...prev };
+      delete next[folderId];
+      for (const c of children) {
+        delete next[c.id];
+      }
+      return next;
+    });
+  };
+
+  // 3. Collapse all recursively under folder (Reverse of 1)
+  const handleCollapseAllRecursively = (folderId: string) => {
+    const all = [folderId, ...getDescendantFolderIds(folderId)];
+    setCollapsedFolderIds((prev) => {
+      const next = { ...prev };
+      for (const id of all) {
+        next[id] = true;
+      }
+      return next;
+    });
+  };
+
+  // 4. Collapse 1 layer under folder (Reverse of 2)
+  const handleCollapseOneLayer = (folderId: string) => {
+    const children = folderHierarchy.childrenMap.get(folderId) || [];
+    setCollapsedFolderIds((prev) => {
+      const next = { ...prev };
+      for (const c of children) {
+        next[c.id] = true;
+      }
+      return next;
+    });
+  };
+
+  // Global Expand All / Collapse All
+  const handleExpandAllGlobal = () => {
+    setCollapsedFolderIds({});
+  };
+
+  const handleCollapseAllGlobal = () => {
+    const all: Record<string, boolean> = {};
+    for (const f of folders) {
+      all[f.id] = true;
+    }
+    setCollapsedFolderIds(all);
+  };
+
+  // Update folder color
+  const handleUpdateFolderColor = async (folderId: string, color: string) => {
+    const target = folders.find((f) => f.id === folderId);
+    if (target) {
+      await db.folders.put({ ...target, color } as any);
+    }
+    setEditingColorFolderId(null);
+  };
 
   // Note Reader & Editor States
   const [viewMode, setViewMode] = useState<'preview' | 'split' | 'edit'>('preview');
@@ -467,12 +616,11 @@ Write your clinical guideline, patient review, or bedside study notes here.
         } else if (selectedFolderFilter === 'unfiled') {
           if (n.folderId) return false;
         } else if (selectedFolderFilter !== 'all') {
-          // Check if note matches this folder OR any of its subfolders
-          const subfolderIds = folders.filter((f) => f.parentId === selectedFolderFilter).map((f) => f.id);
+          // Check if note matches this folder OR any of its recursive subfolders
+          const matchingIds = new Set([selectedFolderFilter, ...getDescendantFolderIds(selectedFolderFilter)]);
           if (
-            n.folderId !== selectedFolderFilter &&
-            !subfolderIds.includes(n.folderId || '') &&
-            n.facility !== selectedFolderFilter
+            !matchingIds.has(n.folderId || '') &&
+            !matchingIds.has(n.facility || '')
           ) {
             return false;
           }
@@ -1294,18 +1442,39 @@ Write your clinical guideline, patient review, or bedside study notes here.
                 </span>
               </button>
 
-              {/* Folders List Section */}
+              {/* Folders List Section with Global Controls */}
               <div className="pt-3 pb-1 flex items-center justify-between px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 <span>Folders</span>
-                <button
-                  type="button"
-                  onClick={() => setIsAddingFolder(true)}
-                  className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5"
-                  title="Add New Folder"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>New</span>
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={handleExpandAllGlobal}
+                    className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    title="Expand all folders"
+                  >
+                    <ChevronsDown className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCollapseAllGlobal}
+                    className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    title="Collapse all folders"
+                  >
+                    <ChevronsUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingFolder(true);
+                      setNewFolderParentId('');
+                    }}
+                    className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 ml-1"
+                    title="Add New Top-Level Folder"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>New</span>
+                  </button>
+                </div>
               </div>
 
               {/* Inline Add Folder Form with Parent Selector */}
@@ -1376,22 +1545,24 @@ Write your clinical guideline, patient review, or bedside study notes here.
                 </form>
               )}
 
-              {/* Nested Collapsible Custom Folders Tree */}
-              {folders
-                .filter((f) => !f.parentId || !folders.some((p) => p.id === f.parentId))
-                .map((root) => {
-                  const subfolders = folders.filter((sub) => sub.parentId === root.id);
-                  const subfolderIds = subfolders.map((s) => s.id);
-                  const count = notes.filter(
-                    (n) => n.folderId === root.id || subfolderIds.includes(n.folderId || '') || n.facility === root.name
-                  ).length;
-                  const isSelected = selectedFolderFilter === root.id;
-                  const isCollapsed = collapsedFolderIds[root.id];
-                  const hasChildren = subfolders.length > 0;
+              {/* Nested Collapsible Custom Folders Tree with 4-Action Expand/Collapse & Color Customization */}
+              {(() => {
+                const PRESET_COLORS = [
+                  '#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ef4444',
+                  '#8b5cf6', '#ec4899', '#14b8a6', '#3b82f6', '#64748b'
+                ];
+
+                const renderFolderNode = (f: FolderItem, depth: number = 0): React.ReactNode => {
+                  const children = folderHierarchy.childrenMap.get(f.id) || [];
+                  const hasChildren = children.length > 0;
+                  const isCollapsed = !!collapsedFolderIds[f.id];
+                  const isSelected = selectedFolderFilter === f.id;
+                  const count = getCumulativeCount(f.id, f.name);
+                  const isColorEditing = editingColorFolderId === f.id;
 
                   return (
-                    <div key={root.id} className="space-y-0.5">
-                      {renamingFolderId === root.id ? (
+                    <div key={f.id} className="space-y-0.5">
+                      {renamingFolderId === f.id ? (
                         <div className="p-1.5 flex items-center gap-1 bg-white dark:bg-slate-800 rounded-xl">
                           <input
                             type="text"
@@ -1402,7 +1573,7 @@ Write your clinical guideline, patient review, or bedside study notes here.
                           />
                           <button
                             type="button"
-                            onClick={() => handleRenameFolderSubmit(root.id)}
+                            onClick={() => handleRenameFolderSubmit(f.id)}
                             className="p-1 text-emerald-600 hover:text-emerald-500"
                           >
                             <Check className="w-3.5 h-3.5" />
@@ -1418,7 +1589,7 @@ Write your clinical guideline, patient review, or bedside study notes here.
                       ) : (
                         <div
                           onClick={() => {
-                            setSelectedFolderFilter(root.id);
+                            setSelectedFolderFilter(f.id);
                             setSelectedTagFilter(null);
                           }}
                           className={`group w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
@@ -1433,9 +1604,10 @@ Write your clinical guideline, patient review, or bedside study notes here.
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setCollapsedFolderIds((prev) => ({ ...prev, [root.id]: !prev[root.id] }));
+                                  setCollapsedFolderIds((prev) => ({ ...prev, [f.id]: !prev[f.id] }));
                                 }}
-                                className="p-0.5 hover:bg-black/10 rounded cursor-pointer"
+                                className="p-0.5 hover:bg-black/10 rounded cursor-pointer shrink-0"
+                                title={isCollapsed ? 'Expand this folder' : 'Collapse this folder'}
                               >
                                 <ChevronRight
                                   className={`w-3.5 h-3.5 transition-transform duration-150 ${
@@ -1444,16 +1616,86 @@ Write your clinical guideline, patient review, or bedside study notes here.
                                 />
                               </button>
                             ) : (
-                              <span className="w-3.5" />
+                              <span className="w-3.5 shrink-0" />
                             )}
-                            <span
-                              className="w-2.5 h-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: root.color || '#6366f1' }}
+
+                            {/* Clickable Color Badge to Change Folder Color */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingColorFolderId(isColorEditing ? null : f.id);
+                              }}
+                              className="w-3 h-3 rounded-full shrink-0 hover:scale-125 transition-transform ring-1 ring-black/10 dark:ring-white/10"
+                              style={{ backgroundColor: f.color || '#6366f1' }}
+                              title="Click to change folder color"
                             />
-                            <span className="truncate">{root.name}</span>
+                            <span className="truncate">{f.name}</span>
                           </div>
 
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 shrink-0">
+                            {/* 4 Precise Recursive & 1-Layer Expand/Collapse Action Buttons */}
+                            {hasChildren && (
+                              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {/* 1. Expand all recursively */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleExpandAllRecursively(f.id);
+                                  }}
+                                  className={`p-0.5 rounded transition-colors ${
+                                    isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500'
+                                  }`}
+                                  title="Open all subfolders under this recursively"
+                                >
+                                  <ChevronsDown className="w-3 h-3 text-emerald-500" />
+                                </button>
+                                {/* 2. Expand 1 layer */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleExpandOneLayer(f.id);
+                                  }}
+                                  className={`p-0.5 rounded transition-colors ${
+                                    isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500'
+                                  }`}
+                                  title="Open 1 layer of subfolders"
+                                >
+                                  <ChevronDown className="w-3 h-3 text-cyan-500" />
+                                </button>
+                                {/* 3. Collapse all recursively (Reverse of 1) */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCollapseAllRecursively(f.id);
+                                  }}
+                                  className={`p-0.5 rounded transition-colors ${
+                                    isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500'
+                                  }`}
+                                  title="Collapse all subfolders under this recursively"
+                                >
+                                  <ChevronsUp className="w-3 h-3 text-amber-500" />
+                                </button>
+                                {/* 4. Collapse 1 layer (Reverse of 2) */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCollapseOneLayer(f.id);
+                                  }}
+                                  className={`p-0.5 rounded transition-colors ${
+                                    isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500'
+                                  }`}
+                                  title="Collapse 1 layer of subfolders"
+                                >
+                                  <ChevronUp className="w-3 h-3 text-purple-500" />
+                                </button>
+                              </div>
+                            )}
+
                             <span
                               className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
                                 isSelected
@@ -1464,28 +1706,44 @@ Write your clinical guideline, patient review, or bedside study notes here.
                               {count}
                             </span>
 
+                            {/* Change Color Trigger */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingColorFolderId(isColorEditing ? null : f.id);
+                              }}
+                              className={`p-1 opacity-0 group-hover:opacity-100 transition-opacity rounded ${
+                                isSelected ? 'text-white/80 hover:text-white' : 'text-slate-400 hover:text-indigo-600'
+                              }`}
+                              title="Change Folder Color"
+                            >
+                              <Palette className="w-3 h-3" />
+                            </button>
+
                             {/* Quick Add Subfolder button */}
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setNewFolderParentId(root.id);
+                                setNewFolderParentId(f.id);
                                 setIsAddingFolder(true);
                               }}
                               className={`p-1 opacity-0 group-hover:opacity-100 transition-opacity rounded ${
                                 isSelected ? 'text-white/80 hover:text-white' : 'text-slate-400 hover:text-indigo-600'
                               }`}
-                              title={`Add subfolder inside ${root.name}`}
+                              title={`Add subfolder inside ${f.name}`}
                             >
                               <FolderPlus className="w-3 h-3" />
                             </button>
 
-                            {root.type === 'knowledge' && (
+                            {/* Delete folder */}
+                            {f.type === 'knowledge' && (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleDeleteFolderSubmit(root.id);
+                                  handleDeleteFolderSubmit(f.id);
                                 }}
                                 className={`p-1 opacity-0 group-hover:opacity-100 transition-opacity rounded ${
                                   isSelected ? 'text-white/80 hover:text-white' : 'text-slate-400 hover:text-red-500'
@@ -1499,93 +1757,47 @@ Write your clinical guideline, patient review, or bedside study notes here.
                         </div>
                       )}
 
-                      {/* Subfolders List (Indented under parent) */}
+                      {/* Color Picker Popover */}
+                      {isColorEditing && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-2 bg-white dark:bg-slate-800 rounded-xl border border-indigo-200 dark:border-indigo-800 shadow-lg flex items-center gap-1.5 flex-wrap my-1 animate-in fade-in"
+                        >
+                          <span className="text-[10px] font-bold text-slate-400 uppercase mr-1">Color:</span>
+                          {PRESET_COLORS.map((col) => (
+                            <button
+                              key={col}
+                              type="button"
+                              onClick={() => handleUpdateFolderColor(f.id, col)}
+                              className={`w-4 h-4 rounded-full transition-transform hover:scale-125 ${
+                                f.color === col ? 'scale-125 ring-2 ring-indigo-500' : ''
+                              }`}
+                              style={{ backgroundColor: col }}
+                              title={col}
+                            />
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setEditingColorFolderId(null)}
+                            className="p-0.5 text-slate-400 hover:text-slate-600 ml-auto"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Recursive Children (Indented by hierarchy) */}
                       {!isCollapsed && hasChildren && (
-                        <div className="pl-4 space-y-0.5 border-l-2 border-slate-200 dark:border-slate-800 ml-3">
-                          {subfolders.map((sub) => {
-                            const subCount = notes.filter((n) => n.folderId === sub.id).length;
-                            const isSubSelected = selectedFolderFilter === sub.id;
-
-                            if (renamingFolderId === sub.id) {
-                              return (
-                                <div key={sub.id} className="p-1 flex items-center gap-1 bg-white dark:bg-slate-800 rounded-lg">
-                                  <input
-                                    type="text"
-                                    value={renamedFolderName}
-                                    onChange={(e) => setRenamedFolderName(e.target.value)}
-                                    autoFocus
-                                    className="flex-1 text-[11px] px-1.5 py-0.5 bg-slate-50 dark:bg-slate-900 border rounded"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRenameFolderSubmit(sub.id)}
-                                    className="p-1 text-emerald-600"
-                                  >
-                                    <Check className="w-3 h-3" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setRenamingFolderId(null)}
-                                    className="p-1 text-slate-400"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <div
-                                key={sub.id}
-                                onClick={() => {
-                                  setSelectedFolderFilter(sub.id);
-                                  setSelectedTagFilter(null);
-                                }}
-                                className={`group w-full flex items-center justify-between px-2 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
-                                  isSubSelected
-                                    ? 'bg-indigo-600 text-white shadow-2xs font-semibold'
-                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                }`}
-                              >
-                                <div className="flex items-center gap-1.5 truncate">
-                                  <span className="text-slate-400 text-xs">└─</span>
-                                  <span
-                                    className="w-2 h-2 rounded-full shrink-0"
-                                    style={{ backgroundColor: sub.color || root.color || '#6366f1' }}
-                                  />
-                                  <span className="truncate">{sub.name}</span>
-                                </div>
-
-                                <div className="flex items-center gap-1">
-                                  <span
-                                    className={`text-[9px] px-1 py-0.2 rounded font-mono ${
-                                      isSubSelected
-                                        ? 'bg-white/20 text-white'
-                                        : 'bg-slate-200/50 dark:bg-slate-800 text-slate-500'
-                                    }`}
-                                  >
-                                    {subCount}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteFolderSubmit(sub.id);
-                                    }}
-                                    className="p-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-500 rounded"
-                                    title="Delete Subfolder"
-                                  >
-                                    <Trash2 className="w-2.5 h-2.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
+                        <div className="pl-3.5 space-y-0.5 border-l-2 border-slate-200 dark:border-slate-800 ml-3">
+                          {children.map((child) => renderFolderNode(child, depth + 1))}
                         </div>
                       )}
                     </div>
                   );
-                })}
+                };
+
+                return folderHierarchy.rootFolders.map((root) => renderFolderNode(root, 0));
+              })()}
 
               {/* Tags Section */}
               {allTags.length > 0 && (

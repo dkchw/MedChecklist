@@ -84,11 +84,13 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
       const canvas = canvasRef.current;
       if (!canvas) return { x: 0, y: 0 };
       const rect = canvas.getBoundingClientRect();
-      const rawX = clientX - rect.left;
-      const rawY = clientY - rect.top;
+      const scaleX = rect.width > 0 ? (canvas.clientWidth || rect.width) / rect.width : 1;
+      const scaleY = rect.height > 0 ? (canvas.clientHeight || rect.height) / rect.height : 1;
+      const localX = (clientX - rect.left) * scaleX;
+      const localY = (clientY - rect.top) * scaleY;
       return {
-        x: (rawX - panX) / zoom,
-        y: (rawY - panY) / zoom,
+        x: (localX - panX) / (zoom || 1),
+        y: (localY - panY) / (zoom || 1),
       };
     },
     [panX, panY, zoom]
@@ -233,8 +235,10 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     const updateDimensions = () => {
       const rect = canvas.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      const newWidth = Math.round(rect.width * dpr);
-      const newHeight = Math.round(rect.height * dpr);
+      const cssW = canvas.clientWidth || rect.width || 300;
+      const cssH = canvas.clientHeight || rect.height || 300;
+      const newWidth = Math.round(cssW * dpr);
+      const newHeight = Math.round(cssH * dpr);
 
       if (canvas.width !== newWidth || canvas.height !== newHeight) {
         canvas.width = newWidth;
@@ -255,6 +259,26 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
       }
     };
   }, [updateBackgroundBuffer, renderDisplay]);
+
+  // Prevent native Android WebView gesture/scroll interference when drawing
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const preventTouchScroll = (e: TouchEvent) => {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+
+    canvas.addEventListener('touchstart', preventTouchScroll, { passive: false });
+    canvas.addEventListener('touchmove', preventTouchScroll, { passive: false });
+
+    return () => {
+      canvas.removeEventListener('touchstart', preventTouchScroll);
+      canvas.removeEventListener('touchmove', preventTouchScroll);
+    };
+  }, []);
 
   // Update background buffer whenever committed strokes or viewport transform changes
   useEffect(() => {
@@ -284,14 +308,20 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     // Palm Rejection Guard
     if (penOnlyMode && e.pointerType !== 'pen') {
-      e.preventDefault();
       return;
     }
 
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    canvas.setPointerCapture(e.pointerId);
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch (_) {}
+
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+
     isDrawingRef.current = true;
 
     const { x, y } = getCanvasCoords(e.clientX, e.clientY);
@@ -334,6 +364,9 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (penOnlyMode && e.pointerType !== 'pen') return;
     if (!isDrawingRef.current) return;
+    if (e.cancelable) {
+      e.preventDefault();
+    }
 
     // Use coalesced events to capture full digitizer sample rate without latency
     const coalescedEvents = (e.nativeEvent as any).getCoalescedEvents

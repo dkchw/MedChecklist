@@ -14,11 +14,19 @@ import {
   ExternalLink,
   Smartphone,
   Laptop,
+  Keyboard,
+  Globe,
 } from 'lucide-react';
 import { APP_VERSION } from '../../version';
 import { checkForGitHubUpdate, UpdateCheckResult } from '../../utils/githubUpdater';
 import { isAndroidApp, downloadAndInstallApk, subscribeToUpdateProgress } from '../../utils/androidBridge';
 import { ThemeMode } from '../../utils/theme';
+import {
+  SUPPORTED_KEYBOARDS,
+  DEFAULT_KEYBOARDS,
+  getEnabledKeyboards,
+  saveEnabledKeyboards,
+} from '../../utils/keyboardLanguages';
 
 interface SettingsModalProps {
   themeMode: ThemeMode;
@@ -44,8 +52,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [downloadStatus, setDownloadStatus] = useState<string | null>(null);
+  const [enabledKeyboards, setEnabledKeyboards] = useState<string[]>(DEFAULT_KEYBOARDS);
 
   const isAndroid = isAndroidApp();
+
+  useEffect(() => {
+    getEnabledKeyboards().then(setEnabledKeyboards);
+  }, []);
+
+  const handleToggleKeyboard = async (id: string) => {
+    let updated: string[];
+    if (enabledKeyboards.includes(id)) {
+      if (enabledKeyboards.length <= 1) {
+        return; // Always retain at least one keyboard
+      }
+      updated = enabledKeyboards.filter((k) => k !== id);
+    } else {
+      updated = [...enabledKeyboards, id];
+    }
+    setEnabledKeyboards(updated);
+    await saveEnabledKeyboards(updated);
+  };
 
   useEffect(() => {
     if (!isAndroid) return;
@@ -285,6 +312,63 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </>
                 )}
               </button>
+            </div>
+          </div>
+
+          {/* Section: Multilingual Virtual Keyboards */}
+          <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Keyboard className="w-4 h-4 text-indigo-500" />
+                  <span>Multilingual Virtual Keyboards</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Select language keyboards and clinical symbols available on the stylus handwriting bar
+                </p>
+              </div>
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                {enabledKeyboards.length} Active
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+              {SUPPORTED_KEYBOARDS.map((kb) => {
+                const isEnabled = enabledKeyboards.includes(kb.id);
+                return (
+                  <button
+                    key={kb.id}
+                    type="button"
+                    onClick={() => handleToggleKeyboard(kb.id)}
+                    className={`p-2.5 rounded-xl border text-left flex items-center justify-between cursor-pointer transition-all ${
+                      isEnabled
+                        ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700 shadow-xs'
+                        : 'bg-white/80 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-lg">{kb.flag}</span>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                          {kb.name}
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                          {kb.nativeName}
+                        </div>
+                      </div>
+                    </div>
+                    <div
+                      className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                        isEnabled
+                          ? 'bg-indigo-600 border-indigo-600 text-white'
+                          : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700'
+                      }`}
+                    >
+                      {isEnabled && <span className="text-[10px] font-black leading-none">✓</span>}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

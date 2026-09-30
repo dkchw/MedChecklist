@@ -457,6 +457,17 @@ export function App() {
     return Array.from(new Set([...fromFolders, ...fromEncounters, ...DEFAULT_WARDS]));
   }, [folders, encounters]);
 
+  const handleOpenInkingMode = () => {
+    if (!selectedEncounterId && encounters.length > 0) {
+      const active = encounters.find((e) => !e.isDeleted && (e.status || 'active') === 'active') || encounters[0];
+      setSelectedEncounterId(active.id);
+    } else if (encounters.length === 0) {
+      setShowNewPatientModal(true);
+      return;
+    }
+    setIsBedsideMode(true);
+  };
+
   return (
     <div className="h-screen max-h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
       {updateInfo && updateInfo.hasUpdate && (
@@ -479,6 +490,7 @@ export function App() {
         onToggleTheme={handleToggleTheme}
         onCheckUpdate={handleCheckUpdate}
         onOpenSettings={() => setShowSettingsModal(true)}
+        onOpenInking={handleOpenInkingMode}
       />
 
       <SidebarDrawer
@@ -503,7 +515,7 @@ export function App() {
         onToggleTheme={handleToggleTheme}
       />
 
-      <main className={`flex-1 flex flex-col min-h-0 ${activeTab.type === 'knowledge' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+      <main className={`flex-1 flex flex-col min-h-0 w-full max-w-full overflow-x-hidden ${activeTab.type === 'knowledge' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
         {activeTab.type === 'encounters' && (
           <PatientEncounterView
             encounters={encounters}

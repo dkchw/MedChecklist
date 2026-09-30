@@ -3,7 +3,12 @@ import getStroke from 'perfect-freehand';
 import { HandwritingOcrService, OcrResult } from '../../utils/handwritingOcr';
 import { InkStroke, StrokePoint } from '../../types/ink';
 import { isPointNearStroke, getAdaptiveInkColor } from '../../utils/inkUtils';
-import { Pen, Check, RotateCcw, X, Sparkles, ArrowRightLeft, Sliders, Delete } from 'lucide-react';
+import { Pen, Check, RotateCcw, X, Sparkles, ArrowRightLeft, Sliders, Delete, Keyboard } from 'lucide-react';
+import {
+  SUPPORTED_KEYBOARDS,
+  KeyboardLanguageConfig,
+  getEnabledKeyboards,
+} from '../../utils/keyboardLanguages';
 
 interface HandwritingInputBoxProps {
   label?: string;
@@ -34,6 +39,18 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
   const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
   const [recognizedText, setRecognizedText] = useState<string>(value || '');
   const [isRecognizing, setIsRecognizing] = useState(false);
+  const [showVirtualKeyboard, setShowVirtualKeyboard] = useState<boolean>(false);
+  const [enabledKeyboards, setEnabledKeyboards] = useState<string[]>(['en', 'vi', 'med_symbols']);
+  const [activeKeyboardId, setActiveKeyboardId] = useState<string>('en');
+
+  useEffect(() => {
+    getEnabledKeyboards().then((ids) => {
+      if (ids && ids.length > 0) {
+        setEnabledKeyboards(ids);
+        setActiveKeyboardId(ids[0]);
+      }
+    });
+  }, []);
 
   // Determine initial preset unit based on field label
   const getInitialUnit = (): string => {
@@ -338,14 +355,95 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          {/* User Requested: Trigger keyboard on the top of stylus input */}
+          <button
+            type="button"
+            onClick={() => setShowVirtualKeyboard(!showVirtualKeyboard)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors border ${
+              showVirtualKeyboard
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+            title="Toggle Multilingual Virtual Keyboard"
+          >
+            <Keyboard className="w-3.5 h-3.5" />
+            <span>{showVirtualKeyboard ? 'Hide Keys' : 'Keyboard'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
+
+      {/* Multilingual Virtual Keyboard Panel */}
+      {showVirtualKeyboard && (
+        <div className="p-2.5 rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-slate-50 dark:bg-slate-800/80 space-y-2 animate-in fade-in duration-100">
+          {/* Language Selector Tabs */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-700 text-xs">
+            {SUPPORTED_KEYBOARDS.filter((kb) => enabledKeyboards.includes(kb.id)).map((kb) => (
+              <button
+                key={kb.id}
+                type="button"
+                onClick={() => setActiveKeyboardId(kb.id)}
+                className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 shrink-0 cursor-pointer transition-colors ${
+                  activeKeyboardId === kb.id
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-700/60 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600'
+                }`}
+              >
+                <span>{kb.flag}</span>
+                <span>{kb.name}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Key Buttons Grid */}
+          {(() => {
+            const currentKb =
+              SUPPORTED_KEYBOARDS.find((kb) => kb.id === activeKeyboardId) || SUPPORTED_KEYBOARDS[0];
+            return (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto p-1 bg-white/70 dark:bg-slate-900/70 rounded-lg border border-slate-200/70 dark:border-slate-800">
+                  {currentKb.keys.map((k, idx) => (
+                    <button
+                      key={`${k}-${idx}`}
+                      type="button"
+                      onClick={() => setRecognizedText((prev) => prev + k)}
+                      className="min-w-7 h-7 px-1.5 rounded bg-slate-100 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-indigo-900/60 text-slate-800 dark:text-slate-100 font-medium text-xs flex items-center justify-center border border-slate-200 dark:border-slate-700 active:scale-95 cursor-pointer transition-all"
+                    >
+                      {k}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Clinical Shortcuts for Active Language */}
+                {currentKb.clinicalShortcuts && currentKb.clinicalShortcuts.length > 0 && (
+                  <div className="flex items-center gap-1 overflow-x-auto text-[10px] py-0.5">
+                    <span className="font-bold text-slate-600 dark:text-slate-300 uppercase shrink-0">
+                      Clinical:
+                    </span>
+                    {currentKb.clinicalShortcuts.map((sc) => (
+                      <button
+                        key={sc}
+                        type="button"
+                        onClick={() => setRecognizedText((prev) => (prev ? `${prev} ${sc}` : sc))}
+                        className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 shrink-0 cursor-pointer transition-colors"
+                      >
+                        {sc}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Preset Unit Bar & Converter */}
       <div className="flex items-center justify-between gap-1 flex-wrap pt-0.5 pb-0.5 border-b border-slate-200 dark:border-slate-800 text-xs">

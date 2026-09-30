@@ -15,6 +15,8 @@ import {
   Search,
   Eye,
   HelpCircle,
+  ChevronDown,
+  Filter,
 } from 'lucide-react';
 import { TemplateReaderModal } from './TemplateReaderModal';
 import { ClinicalRecallModal } from '../common/ClinicalRecallModal';
@@ -334,31 +336,36 @@ ${t.protocolNotes ? `### Protocol Guidance Notes:\n${t.protocolNotes}` : ''}`;
           )}
         </div>
 
-        {/* Categories Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-          <button
-            onClick={() => setSelectedCategory('all')}
-            className={`px-3 py-1.5 rounded-xl font-semibold transition-colors shrink-0 ${
-              selectedCategory === 'all'
-                ? 'bg-slate-900 dark:bg-indigo-600 text-white'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-            }`}
-          >
-            All Template Bundles ({templates.filter((t) => !t.isDeleted).length})
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-xl font-medium transition-colors shrink-0 ${
-                selectedCategory === cat
-                  ? 'bg-slate-900 dark:bg-indigo-600 text-white'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
+        {/* Category Dropdown Selector */}
+        <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <Filter className="w-4 h-4 text-indigo-500 shrink-0" />
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">Category:</span>
+            <div className="relative flex-1 max-w-xs sm:max-w-sm">
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full text-xs font-semibold px-3 py-1.5 pr-8 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none truncate"
+              >
+                <option value="all">
+                  All Template Bundles ({templates.filter((t) => !t.isDeleted).length})
+                </option>
+                {categories.map((cat) => {
+                  const count = templates.filter((t) => !t.isDeleted && t.category === cat).length;
+                  return (
+                    <option key={cat} value={cat}>
+                      {cat} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+
+          <div className="text-[11px] font-mono text-slate-400 dark:text-slate-500 hidden sm:block shrink-0">
+            {filteredTemplates.length} of {templates.filter((t) => !t.isDeleted).length} shown
+          </div>
         </div>
       </div>
 

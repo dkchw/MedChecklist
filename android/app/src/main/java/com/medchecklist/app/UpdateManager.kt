@@ -15,6 +15,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import java.io.File
 
 /**
@@ -46,11 +47,33 @@ class UpdateManager(
     }
 
     @JavascriptInterface
-    fun checkCanInstallPackages(): Boolean = true
+    fun checkCanInstallPackages(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            activity.packageManager.canRequestPackageInstalls()
+        } else {
+            true
+        }
+    }
 
     @JavascriptInterface
     fun openInstallPermissionSettings() {
-        openDownloadsFolder()
+        mainHandler.post {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                try {
+                    val intent = Intent(
+                        android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:${activity.packageName}")
+                    ).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    activity.startActivity(intent)
+                } catch (e: Exception) {
+                    openDownloadsFolder()
+                }
+            } else {
+                openDownloadsFolder()
+            }
+        }
     }
 
     @JavascriptInterface
@@ -156,7 +179,7 @@ class UpdateManager(
 
                     if (status == DownloadManager.STATUS_SUCCESSFUL) {
                         dispatchJsEvent("android-update-progress", "{ status: 'completed', progress: 100 }")
-                        promptInstall(fileName)
+                        promptInstall(fileName, id, dm)
                     } else {
                         val reasonIndex = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
                         val reason = if (reasonIndex >= 0) cursor.getInt(reasonIndex) else 0
@@ -178,24 +201,60 @@ class UpdateManager(
         }
     }
 
-    private fun promptInstall(fileName: String) {
-        try {
-            // Open system Downloads where user can tap the completed APK safely
-            val intent = Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    private fun promptInstall(fileName: String, downloadId: Long, dm: DownloadManager) {
+        mainHandler.post {
+            try {
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val apkFile = File(downloadsDir, fileName)
+
+                val apkUri: Uri? = if (apkFile.exists()) {
+                    FileProvider.getUriForFile(
+                        activity,
+                        "${activity.packageName}.fileprovider",
+                        apkFile
+                    )
+                } else {
+                    dm.getUriForDownloadedFile(downloadId)
+                }
+
+                if (apkUri == null) {
+                    Toast.makeText(activity, "Could not find downloaded APK file", Toast.LENGTH_LONG).show()
+                    openDownloadsFolder()
+                    return@post
+                }
+
+                // Guide user if unknown apps permission is required on Android 8+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.packageManager.canRequestPackageInstalls()) {
+                    Toast.makeText(
+                        activity,
+                        "Please allow MedChecklist to install updates.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+
+                val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(apkUri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                activity.startActivity(installIntent)
+                Toast.makeText(activity, "Prompting system installer...", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                // Graceful fallback to opening Downloads folder if package installer intent fails
+                try {
+                    val intent = Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    activity.startActivity(intent)
+                    Toast.makeText(
+                        activity,
+                        "Download complete. Tap $fileName to install.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } catch (_: Exception) {
+                    Toast.makeText(activity, "Installer error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
-            activity.startActivity(intent)
-            Toast.makeText(
-                activity,
-                "Download complete. Tap $fileName in Downloads to install.",
-                Toast.LENGTH_LONG
-            ).show()
-        } catch (e: Exception) {
-            Toast.makeText(
-                activity,
-                "Download complete. Check the notification bar or Downloads app to install.",
-                Toast.LENGTH_LONG
-            ).show()
         }
     }
 
