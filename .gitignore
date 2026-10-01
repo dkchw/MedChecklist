@@ -19,6 +19,8 @@ android/.gradle
 android/build
 android/app/build
 android/local.properties
+desktop/build
+.agents
 *.apk
 *.tar.gz
 medchecklist-v*

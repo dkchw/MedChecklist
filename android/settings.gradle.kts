@@ -12,6 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-
-rootProject.name = "MedChecklist"
+rootProject.name = "MedChecklistNative"
 include(":app")

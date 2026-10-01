@@ -1,137 +1,94 @@
 package com.medchecklist.app
 
-import android.annotation.SuppressLint
-import android.app.Activity
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
-import android.webkit.ValueCallback
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
-import android.webkit.WebView
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
-import androidx.webkit.WebViewAssetLoader
-import androidx.webkit.WebViewAssetLoader.AssetsPathHandler
-import androidx.webkit.WebViewClientCompat
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.medchecklist.app.ui.BedsideInkingScreen
+import com.medchecklist.app.ui.EncounterListScreen
+import com.medchecklist.app.ui.EncounterViewModel
+import com.medchecklist.app.ui.InkingViewModel
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : ComponentActivity() {
+    private val encounterViewModel: EncounterViewModel by viewModels()
+    private val inkingViewModel: InkingViewModel by viewModels()
 
-    private lateinit var webView: WebView
-    private lateinit var updateManager: UpdateManager
-    private lateinit var digitalInkManager: DigitalInkManager
-    private var filePathCallback: ValueCallback<Array<Uri>>? = null
-
-    private val fileChooserLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val intent = result.data
-            val results = WebChromeClient.FileChooserParams.parseResult(result.resultCode, intent)
-            filePathCallback?.onReceiveValue(results)
-        } else {
-            filePathCallback?.onReceiveValue(null)
-        }
-        filePathCallback = null
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Disable remote debugging in release builds for Play Protect compliance
-        WebView.setWebContentsDebuggingEnabled(false)
-
-        webView = WebView(this)
-        setContentView(webView)
-
-        // Initialize UpdateManager and attach JS interface
-        updateManager = UpdateManager(this, webView)
-        webView.addJavascriptInterface(updateManager, "AndroidApp")
-
-        // Initialize Google ML Kit Digital Ink Recognition and attach JS interface
-        digitalInkManager = DigitalInkManager(this, webView)
-        webView.addJavascriptInterface(digitalInkManager, "AndroidDigitalInk")
-
-        // Set up secure local asset loader to allow ES modules and IndexedDB
-        val assetLoader = WebViewAssetLoader.Builder()
-            .setDomain("appassets.androidplatform.net")
-            .addPathHandler("/assets/", AssetsPathHandler(this))
-            .addPathHandler("/", AssetsPathHandler(this))
-            .build()
-
-        webView.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            databaseEnabled = true
-            allowFileAccess = false
-            allowContentAccess = true
-            cacheMode = WebSettings.LOAD_DEFAULT
-            useWideViewPort = true
-            loadWithOverviewMode = true
-            mediaPlaybackRequiresUserGesture = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-        }
-
-        webView.webViewClient = object : WebViewClientCompat() {
-            override fun shouldInterceptRequest(
-                view: WebView,
-                request: WebResourceRequest
-            ): WebResourceResponse? {
-                return assetLoader.shouldInterceptRequest(request.url)
+        setContent {
+            MaterialTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    MedChecklistApp(
+                        encounterViewModel = encounterViewModel,
+                        inkingViewModel = inkingViewModel
+                    )
+                }
             }
         }
+    }
+}
 
-        webView.webChromeClient = object : WebChromeClient() {
-            override fun onShowFileChooser(
-                webView: WebView?,
-                filePathCallback: ValueCallback<Array<Uri>>?,
-                fileChooserParams: FileChooserParams?
-            ): Boolean {
-                this@MainActivity.filePathCallback?.onReceiveValue(null)
-                this@MainActivity.filePathCallback = filePathCallback
+@Composable
+fun MedChecklistApp(
+    encounterViewModel: EncounterViewModel,
+    inkingViewModel: InkingViewModel
+) {
+    val encounters by encounterViewModel.encounters.collectAsStateWithLifecycle()
+    val templates by encounterViewModel.templates.collectAsStateWithLifecycle()
+    val selectedId by encounterViewModel.selectedEncounterId.collectAsStateWithLifecycle()
 
-                val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
-                    type = "image/*"
-                }
+    val currentEncounter = remember(encounters, selectedId) {
+        encounters.find { it.id == selectedId }
+    }
 
-                try {
-                    fileChooserLauncher.launch(intent)
-                } catch (e: Exception) {
-                    this@MainActivity.filePathCallback = null
-                    return false
-                }
-                return true
+    LaunchedEffect(currentEncounter?.id) {
+        inkingViewModel.setEncounter(currentEncounter?.id, currentEncounter?.pagesCount ?: 1)
+    }
+
+    if (currentEncounter == null) {
+        EncounterListScreen(
+            encounters = encounters,
+            templates = templates,
+            onSelectEncounter = { encounterViewModel.selectEncounter(it) },
+            onCreateEncounter = { id, bed, fac, grp, cc, tmpl ->
+                encounterViewModel.createEncounter(id, bed, fac, grp, cc, tmpl)
+            },
+            onTogglePin = { encounterViewModel.togglePinEncounter(it) }
+        )
+    } else {
+        val strokes by inkingViewModel.pageStrokes.collectAsStateWithLifecycle()
+        val inkingUiState by inkingViewModel.uiState.collectAsStateWithLifecycle()
+
+        BedsideInkingScreen(
+            encounter = currentEncounter,
+            allEncounters = encounters,
+            strokes = strokes,
+            uiState = inkingUiState,
+            onBack = { encounterViewModel.selectEncounter(null) },
+            onSelectPatient = { encounterViewModel.selectEncounter(it) },
+            onCommitStroke = { inkingViewModel.commitStroke(it) },
+            onEraseAt = { inkingViewModel.eraseStrokesAt(it) },
+            onSelectTool = { inkingViewModel.setTool(it) },
+            onSelectColor = { inkingViewModel.setColor(it) },
+            onSelectSize = { inkingViewModel.setSize(it) },
+            onTogglePenOnlyMode = { inkingViewModel.togglePenOnlyMode() },
+            onUndo = { inkingViewModel.undo() },
+            onRedo = { inkingViewModel.redo() },
+            onClear = { inkingViewModel.clearPage() },
+            onSetPageIndex = { inkingViewModel.setPageIndex(it) },
+            onAddPage = { inkingViewModel.addPage() },
+            onToggleChecklistItem = { chkId, secId, itemId ->
+                encounterViewModel.toggleChecklistItem(currentEncounter, chkId, secId, itemId)
             }
-        }
-
-        // Load via secure origin so ES modules and IndexedDB work offline
-        webView.loadUrl("https://appassets.androidplatform.net/assets/index.html")
-    }
-
-    override fun onResume() {
-        super.onResume()
-    }
-
-    override fun onDestroy() {
-        if (::updateManager.isInitialized) {
-            updateManager.cleanup()
-        }
-        if (::digitalInkManager.isInitialized) {
-            digitalInkManager.cleanup()
-        }
-        super.onDestroy()
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
-        }
+        )
     }
 }

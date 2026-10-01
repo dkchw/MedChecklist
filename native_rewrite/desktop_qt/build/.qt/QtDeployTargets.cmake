@@ -1,2 +1,0 @@
-set(__QT_DEPLOY_TARGET_MedChecklistDesktop_FILE /run/host/home/dkchw/Documents/Code/Ongoing/Repo/MedChecklist/native_rewrite/desktop_qt/build/MedChecklistDesktop)
-set(__QT_DEPLOY_TARGET_MedChecklistDesktop_TYPE EXECUTABLE)
