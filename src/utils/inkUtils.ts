@@ -1,5 +1,5 @@
 import { getStroke } from 'perfect-freehand';
-import { InkStroke, StrokePoint } from '../types/ink';
+import { InkStroke, StrokePoint, PenTool } from '../types/ink';
 
 export function getSvgPathFromStroke(strokePoints: number[][]): string {
   if (!strokePoints.length) return '';
@@ -12,6 +12,53 @@ export function getSvgPathFromStroke(strokePoints: number[][]): string {
   }
   d.push('Z');
   return d.join(' ');
+}
+
+export function pointsToSvgPath(
+  strokePoints: StrokePoint[],
+  size: number = 3,
+  tool: PenTool = 'pen'
+): string {
+  if (!strokePoints || strokePoints.length === 0) return '';
+
+  if (strokePoints.length === 1) {
+    const p = strokePoints[0];
+    const r = Math.max(1, size / 2);
+    return `M ${p.x - r} ${p.y} a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0`;
+  }
+
+  const hasHardwarePressure = strokePoints.some(
+    (p) => p.pressure !== undefined && p.pressure > 0 && p.pressure !== 0.5
+  );
+
+  const points = strokePoints.map((p) => {
+    const pres = p.pressure && p.pressure > 0 ? Math.max(0.12, Math.min(1.0, p.pressure)) : 0.5;
+    return [p.x, p.y, pres];
+  });
+
+  const outline = getStroke(points, {
+    size: tool === 'highlighter' ? size * 2.2 : size,
+    thinning: tool === 'highlighter' ? 0 : 0.6,
+    smoothing: 0.72,
+    streamline: 0.58,
+    simulatePressure: !hasHardwarePressure,
+    start: {
+      taper: tool === 'highlighter' ? 0 : size * 0.4,
+      cap: true,
+    },
+    end: {
+      taper: tool === 'highlighter' ? 0 : size * 0.4,
+      cap: true,
+    },
+  });
+
+  if (!outline.length) return '';
+
+  return getSvgPathFromStroke(outline);
+}
+
+export function strokeToSvgPath(stroke: InkStroke): string {
+  return pointsToSvgPath(stroke.points, stroke.size, stroke.tool);
 }
 
 export function drawStrokeOnCanvas(

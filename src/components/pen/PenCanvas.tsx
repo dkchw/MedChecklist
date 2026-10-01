@@ -1,6 +1,12 @@
-import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { InkStroke, PenTool, StrokePoint } from '../../types/ink';
-import { drawStrokeOnCanvas, isPointNearStroke, isStrokeInPolygon } from '../../utils/inkUtils';
+import {
+  strokeToSvgPath,
+  pointsToSvgPath,
+  getAdaptiveInkColor,
+  isPointNearStroke,
+  isStrokeInPolygon,
+} from '../../utils/inkUtils';
 import { Copy, Trash2, X } from 'lucide-react';
 
 interface PenCanvasProps {
@@ -24,6 +30,11 @@ interface SelectionBounds {
   maxY: number;
 }
 
+/**
+ * Modern Vector SVG Inking Engine.
+ * Replaces fragile HTML5 Canvas 2D rasterization with pure hardware-accelerated vector SVG.
+ * Immune to GPU texture size limits, device pixel ratio scaling artifacts, or blank-screen resets on Android WebView.
+ */
 export const PenCanvas: React.FC<PenCanvasProps> = ({
   strokes,
   onChangeStrokes,
@@ -37,57 +48,39 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
   className = '',
   penOnlyMode = false,
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const bufferCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const rafIdRef = useRef<number | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
-  // Active in-progress stroke points kept in ref for zero-lag 120 FPS rendering
-  const activePointsRef = useRef<StrokePoint[]>([]);
+  // Active in-progress stroke points
+  const [activePoints, setActivePoints] = useState<StrokePoint[]>([]);
   const isDrawingRef = useRef(false);
 
-  // Irregular Freehand Lasso Selector state
-  const activeLassoRef = useRef<StrokePoint[]>([]);
+  // Lasso Selector state
+  const [activeLasso, setActiveLasso] = useState<StrokePoint[]>([]);
   const [selectedStrokeIds, setSelectedStrokeIds] = useState<string[]>([]);
   const isDraggingSelectionRef = useRef(false);
   const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
-  const dragDeltaRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+  const [dragDelta, setDragDelta] = useState<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
 
-  // Refs for current props to avoid stale closures in native DOM event listeners
-  const propsRef = useRef({
-    strokes,
-    onChangeStrokes,
-    tool,
-    color,
-    size,
-    pageIndex,
-    panX,
-    panY,
-    zoom,
-    penOnlyMode,
-  });
+  // Theme detection
+  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const activeAdaptiveColor = getAdaptiveInkColor(color, isDark);
 
-  useEffect(() => {
-    propsRef.current = {
-      strokes,
-      onChangeStrokes,
-      tool,
-      color,
-      size,
-      pageIndex,
-      panX,
-      panY,
-      zoom,
-      penOnlyMode,
-    };
-  });
-
-  // Filter strokes belonging to current page (memoized)
+  // Filter strokes belonging to current page
   const pageStrokes = useMemo(
     () => strokes.filter((s) => (s.pageIndex ?? 0) === pageIndex),
     [strokes, pageIndex]
   );
 
-  // Calculate tight bounding box of selected strokes
+  // Memoized SVG paths for all committed page strokes
+  const strokePathMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of pageStrokes) {
+      map.set(s.id, strokeToSvgPath(s));
+    }
+    return map;
+  }, [pageStrokes]);
+
+  // Calculate bounding box of selected strokes
   const selectedBounds = useMemo((): SelectionBounds | null => {
     if (selectedStrokeIds.length === 0) return null;
     let minX = Infinity,
@@ -108,450 +101,237 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     return { minX, minY, maxX, maxY };
   }, [pageStrokes, selectedStrokeIds]);
 
-  // Convert client pointer coordinates to canvas virtual coordinate space
-  const getCanvasCoords = useCallback(
+  // Convert screen pointer coordinates to canvas virtual coordinate space
+  const getVirtualCoords = useCallback(
     (clientX: number, clientY: number) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return { x: 0, y: 0 };
-      const rect = canvas.getBoundingClientRect();
+      const svg = svgRef.current;
+      if (!svg) return { x: 0, y: 0 };
+      const rect = svg.getBoundingClientRect();
       const localX = clientX - rect.left;
       const localY = clientY - rect.top;
-      const pX = propsRef.current.panX;
-      const pY = propsRef.current.panY;
-      const zm = propsRef.current.zoom || 1;
+      const zm = zoom || 1;
       return {
-        x: (localX - pX) / zm,
-        y: (localY - pY) / zm,
+        x: (localX - panX) / zm,
+        y: (localY - panY) / zm,
       };
     },
-    []
+    [panX, panY, zoom]
   );
 
-  // 1. Render all committed strokes to the background buffer canvas
-  const updateBackgroundBuffer = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    if (!bufferCanvasRef.current) {
-      bufferCanvasRef.current = document.createElement('canvas');
-    }
-    const buffer = bufferCanvasRef.current;
-    const dpr = window.devicePixelRatio || 1;
-
-    if (buffer.width !== canvas.width || buffer.height !== canvas.height) {
-      buffer.width = canvas.width;
-      buffer.height = canvas.height;
-    }
-
-    const bCtx = buffer.getContext('2d');
-    if (!bCtx) return;
-
-    bCtx.setTransform(1, 0, 0, 1, 0, 0);
-    bCtx.clearRect(0, 0, buffer.width, buffer.height);
-
-    bCtx.save();
-    bCtx.scale(dpr, dpr);
-    bCtx.translate(panX, panY);
-    bCtx.scale(zoom, zoom);
-
-    for (const stroke of pageStrokes) {
-      drawStrokeOnCanvas(bCtx, stroke);
-    }
-    bCtx.restore();
-  }, [pageStrokes, panX, panY, zoom]);
-
-  // 2. Fast single-frame blit + active overlay render
-  const renderDisplay = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const buffer = bufferCanvasRef.current;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Blit pre-rendered background buffer in 1 hardware-accelerated drawImage call
-    if (buffer && buffer.width > 0 && buffer.height > 0) {
-      ctx.drawImage(buffer, 0, 0);
-    }
-
-    const dpr = window.devicePixelRatio || 1;
-    ctx.save();
-    ctx.scale(dpr, dpr);
-    ctx.translate(panX, panY);
-    ctx.scale(zoom, zoom);
-
-    // If currently dragging selected strokes, render their preview with delta
-    if (isDraggingSelectionRef.current && (dragDeltaRef.current.dx !== 0 || dragDeltaRef.current.dy !== 0)) {
-      const { dx, dy } = dragDeltaRef.current;
-      for (const s of pageStrokes) {
-        if (selectedStrokeIds.includes(s.id)) {
-          const previewStroke: InkStroke = {
-            ...s,
-            points: s.points.map((p) => ({ x: p.x + dx, y: p.y + dy, pressure: p.pressure })),
-          };
-          drawStrokeOnCanvas(ctx, previewStroke);
-        }
-      }
-    }
-
-    // Render active stroke currently being drawn with sub-millisecond vector pathing
-    const pts = activePointsRef.current;
-    if (pts.length > 0 && tool !== 'eraser' && tool !== 'selector') {
-      const activeStrokeObj: InkStroke = {
-        id: 'active',
-        points: pts,
-        color,
-        size,
-        tool,
-        pageIndex,
-        timestamp: 0,
-      };
-      drawStrokeOnCanvas(ctx, activeStrokeObj);
-    }
-
-    // Render active freehand lasso path
-    const lasso = activeLassoRef.current;
-    if (lasso.length > 1) {
-      ctx.strokeStyle = '#6366f1';
-      ctx.lineWidth = 2 / (zoom || 1);
-      ctx.setLineDash([6 / (zoom || 1), 4 / (zoom || 1)]);
-      ctx.beginPath();
-      ctx.moveTo(lasso[0].x, lasso[0].y);
-      for (let i = 1; i < lasso.length; i++) {
-        ctx.lineTo(lasso[i].x, lasso[i].y);
-      }
-      ctx.stroke();
-
-      ctx.fillStyle = 'rgba(99, 102, 241, 0.08)';
-      ctx.closePath();
-      ctx.fill();
-      ctx.setLineDash([]);
-    }
-
-    // Render selection dashed marquee box
-    if (selectedBounds && tool === 'selector') {
-      ctx.strokeStyle = '#4f46e5';
-      ctx.lineWidth = 2 / (zoom || 1);
-      ctx.setLineDash([6 / (zoom || 1), 4 / (zoom || 1)]);
-      const pad = 8 / (zoom || 1);
-      const { dx, dy } = dragDeltaRef.current;
-      ctx.strokeRect(
-        selectedBounds.minX + dx - pad,
-        selectedBounds.minY + dy - pad,
-        selectedBounds.maxX - selectedBounds.minX + pad * 2,
-        selectedBounds.maxY - selectedBounds.minY + pad * 2
-      );
-      ctx.setLineDash([]);
-    }
-
-    ctx.restore();
-  }, [color, pageIndex, pageStrokes, panX, panY, selectedBounds, selectedStrokeIds, size, tool, zoom]);
-
-  // Request display frame on next animation frame
-  const scheduleRender = useCallback(() => {
-    if (rafIdRef.current !== null) return;
-    rafIdRef.current = requestAnimationFrame(() => {
-      rafIdRef.current = null;
-      renderDisplay();
-    });
-  }, [renderDisplay]);
-
-  // Setup HiDPI Canvas Dimensions & Resize Observer
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const updateDimensions = () => {
-      const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      const cssW = canvas.clientWidth || rect.width || 300;
-      const cssH = canvas.clientHeight || rect.height || 300;
-      const newWidth = Math.max(1, Math.round(cssW * dpr));
-      const newHeight = Math.max(1, Math.round(cssH * dpr));
-
-      if (canvas.width !== newWidth || canvas.height !== newHeight) {
-        canvas.width = newWidth;
-        canvas.height = newHeight;
-        updateBackgroundBuffer();
-        renderDisplay();
-      }
-    };
-
-    updateDimensions();
-    const observer = new ResizeObserver(updateDimensions);
-    observer.observe(canvas);
-
-    return () => {
-      observer.disconnect();
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-      }
-    };
-  }, [updateBackgroundBuffer, renderDisplay]);
-
-  // Update background buffer whenever committed strokes or viewport transform changes
-  useEffect(() => {
-    updateBackgroundBuffer();
-    renderDisplay();
-  }, [updateBackgroundBuffer, renderDisplay]);
-
-  // Re-render buffer canvas when dark/light mode class changes on html
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      updateBackgroundBuffer();
-      renderDisplay();
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, [updateBackgroundBuffer, renderDisplay]);
-
-  // Helper to detect if stylus barrel / eraser button is currently pressed
-  const isPenEraserActive = (e: PointerEvent): boolean => {
+  // Helper to detect stylus barrel / side eraser button
+  const isPenEraserActive = (e: React.PointerEvent<SVGSVGElement>): boolean => {
     return (
-      e.pointerType === 'eraser' ||
+      (e.pointerType as string) === 'eraser' ||
       (e.pointerType === 'pen' &&
         ((e.buttons & 2) !== 0 ||
           (e.buttons & 4) !== 0 ||
           (e.buttons & 32) !== 0 ||
           e.button === 2 ||
           e.button === 5 ||
-          e.altKey))
+          (e as any).altKey))
     );
   };
 
-  // NATIVE DOM POINTER EVENT PIPELINE:
-  // Using direct DOM listeners with { passive: false } ensures 100% reliable touch & stylus capture
-  // on Android WebView, iOS Safari, desktop browsers, avoiding React synthetic event bubbling quirks.
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // POINTER DOWN
+  const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    // Palm Rejection: reject finger touch when pen-only mode is active
+    if (penOnlyMode && (e.pointerType as string) !== 'pen' && (e.pointerType as string) !== 'eraser') {
+      return;
+    }
 
-    const onPointerDown = (e: PointerEvent) => {
-      const { penOnlyMode, tool, size, pageIndex, strokes, onChangeStrokes } = propsRef.current;
+    const svg = svgRef.current;
+    if (!svg) return;
 
-      // Palm Rejection Guard
-      if (penOnlyMode && e.pointerType !== 'pen' && e.pointerType !== 'eraser') {
-        return;
+    try {
+      svg.setPointerCapture(e.pointerId);
+    } catch (_) {}
+
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+
+    isDrawingRef.current = true;
+
+    const { x, y } = getVirtualCoords(e.clientX, e.clientY);
+    const pressure = e.pressure && e.pressure > 0 ? Math.max(0.12, Math.min(1.0, e.pressure)) : 0.5;
+
+    const isEraser = tool === 'eraser' || isPenEraserActive(e);
+
+    if (isEraser) {
+      setActivePoints([]);
+      const remaining = strokes.filter(
+        (s) => (s.pageIndex ?? 0) !== pageIndex || !isPointNearStroke({ x, y }, s, size * 3)
+      );
+      if (remaining.length !== strokes.length) {
+        onChangeStrokes(remaining);
       }
-
-      try {
-        canvas.setPointerCapture(e.pointerId);
-      } catch (_) {}
-
-      if (e.cancelable) {
-        e.preventDefault();
+    } else if (tool === 'selector') {
+      if (
+        selectedBounds &&
+        x >= selectedBounds.minX - 12 &&
+        x <= selectedBounds.maxX + 12 &&
+        y >= selectedBounds.minY - 12 &&
+        y <= selectedBounds.maxY + 12
+      ) {
+        isDraggingSelectionRef.current = true;
+        dragStartPosRef.current = { x, y };
+        setDragDelta({ dx: 0, dy: 0 });
+      } else {
+        setSelectedStrokeIds([]);
+        setActiveLasso([{ x, y, pressure }]);
       }
+    } else {
+      setActivePoints([{ x, y, pressure }]);
+    }
+  };
 
-      isDrawingRef.current = true;
+  // POINTER MOVE
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!isDrawingRef.current) return;
+    if (penOnlyMode && (e.pointerType as string) !== 'pen' && (e.pointerType as string) !== 'eraser') return;
 
-      const { x, y } = getCanvasCoords(e.clientX, e.clientY);
-      const pressure = e.pressure && e.pressure > 0 ? Math.max(0.12, Math.min(1.0, e.pressure)) : 0.5;
+    if (e.cancelable) {
+      e.preventDefault();
+    }
 
-      const isEraser = tool === 'eraser' || isPenEraserActive(e);
+    // Capture coalesced events if available for high-rate 120Hz/240Hz digitizers
+    const coalescedEvents = (e.nativeEvent as any).getCoalescedEvents
+      ? (e.nativeEvent as any).getCoalescedEvents()
+      : [e];
 
-      if (isEraser) {
-        activePointsRef.current = [];
+    const isEraser = tool === 'eraser' || isPenEraserActive(e);
+
+    if (isEraser) {
+      for (const ev of coalescedEvents) {
+        const { x, y } = getVirtualCoords(ev.clientX, ev.clientY);
         const remaining = strokes.filter(
-          (s) => (s.pageIndex ?? 0) !== pageIndex || !isPointNearStroke({ x, y }, s, size * 2.5)
+          (s) => (s.pageIndex ?? 0) !== pageIndex || !isPointNearStroke({ x, y }, s, size * 3)
         );
         if (remaining.length !== strokes.length) {
           onChangeStrokes(remaining);
         }
-        scheduleRender();
-      } else if (tool === 'selector') {
-        const bounds = selectedBounds;
-        if (
-          bounds &&
-          x >= bounds.minX - 12 &&
-          x <= bounds.maxX + 12 &&
-          y >= bounds.minY - 12 &&
-          y <= bounds.maxY + 12
-        ) {
-          isDraggingSelectionRef.current = true;
-          dragStartPosRef.current = { x, y };
-          dragDeltaRef.current = { dx: 0, dy: 0 };
-        } else {
-          setSelectedStrokeIds([]);
-          activeLassoRef.current = [{ x, y, pressure }];
-          scheduleRender();
-        }
+      }
+    } else if (tool === 'selector') {
+      const { x, y } = getVirtualCoords(e.clientX, e.clientY);
+      if (isDraggingSelectionRef.current && dragStartPosRef.current) {
+        setDragDelta({
+          dx: x - dragStartPosRef.current.x,
+          dy: y - dragStartPosRef.current.y,
+        });
       } else {
-        activePointsRef.current = [{ x, y, pressure }];
-        scheduleRender();
+        setActiveLasso((prev) => [...prev, { x, y, pressure: 0.5 }]);
       }
-    };
-
-    const onPointerMove = (e: PointerEvent) => {
-      const { penOnlyMode, tool, size, pageIndex, strokes, onChangeStrokes } = propsRef.current;
-
-      if (!isDrawingRef.current) return;
-      if (penOnlyMode && e.pointerType !== 'pen' && e.pointerType !== 'eraser') return;
-
-      if (e.cancelable) {
-        e.preventDefault();
-      }
-
-      // Capture all high-frequency digitizer samples via coalesced events if available
-      const coalescedEvents = (e as any).getCoalescedEvents
-        ? (e as any).getCoalescedEvents()
-        : [e];
-
+    } else {
+      const newPoints: StrokePoint[] = [];
       for (const ev of coalescedEvents) {
-        const { x, y } = getCanvasCoords(ev.clientX, ev.clientY);
+        const { x, y } = getVirtualCoords(ev.clientX, ev.clientY);
         const pressure = ev.pressure && ev.pressure > 0 ? Math.max(0.12, Math.min(1.0, ev.pressure)) : 0.5;
-
-        const isEraser = tool === 'eraser' || isPenEraserActive(ev);
-
-        if (isEraser) {
-          activePointsRef.current = [];
-          const remaining = strokes.filter(
-            (s) => (s.pageIndex ?? 0) !== pageIndex || !isPointNearStroke({ x, y }, s, size * 2.5)
-          );
-          if (remaining.length !== strokes.length) {
-            onChangeStrokes(remaining);
-          }
-          scheduleRender();
-        } else if (tool === 'selector') {
-          if (isDraggingSelectionRef.current && dragStartPosRef.current) {
-            dragDeltaRef.current = {
-              dx: x - dragStartPosRef.current.x,
-              dy: y - dragStartPosRef.current.y,
-            };
-            scheduleRender();
-          } else if (activeLassoRef.current.length > 0) {
-            activeLassoRef.current.push({ x, y, pressure });
-            scheduleRender();
-          }
-        } else {
-          activePointsRef.current.push({ x, y, pressure });
-          scheduleRender();
-        }
+        newPoints.push({ x, y, pressure });
       }
-    };
+      setActivePoints((prev) => [...prev, ...newPoints]);
+    }
+  };
 
-    const onPointerUp = (e: PointerEvent) => {
-      const { penOnlyMode, tool, color, size, pageIndex, strokes, onChangeStrokes } = propsRef.current;
+  // POINTER UP
+  const handlePointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (penOnlyMode && (e.pointerType as string) !== 'pen' && (e.pointerType as string) !== 'eraser') return;
+    if (!isDrawingRef.current) return;
 
-      if (penOnlyMode && e.pointerType !== 'pen' && e.pointerType !== 'eraser') return;
-      if (!isDrawingRef.current) return;
-
+    const svg = svgRef.current;
+    if (svg) {
       try {
-        canvas.releasePointerCapture(e.pointerId);
+        svg.releasePointerCapture(e.pointerId);
       } catch (_) {}
+    }
 
-      isDrawingRef.current = false;
+    isDrawingRef.current = false;
 
-      const isEraser = tool === 'eraser' || isPenEraserActive(e);
-      if (isEraser) {
-        activePointsRef.current = [];
-        scheduleRender();
-        return;
-      }
+    const isEraser = tool === 'eraser' || isPenEraserActive(e);
+    if (isEraser) {
+      setActivePoints([]);
+      return;
+    }
 
-      if (tool === 'selector') {
-        if (isDraggingSelectionRef.current) {
-          const { dx, dy } = dragDeltaRef.current;
-          if (dx !== 0 || dy !== 0) {
-            const updated = strokes.map((s) => {
-              if (selectedStrokeIds.includes(s.id) && (s.pageIndex ?? 0) === pageIndex) {
-                return {
-                  ...s,
-                  points: s.points.map((p) => ({
-                    ...p,
-                    x: p.x + dx,
-                    y: p.y + dy,
-                  })),
-                };
-              }
-              return s;
-            });
-            onChangeStrokes(updated);
-          }
-          isDraggingSelectionRef.current = false;
-          dragStartPosRef.current = null;
-          dragDeltaRef.current = { dx: 0, dy: 0 };
-        } else if (activeLassoRef.current.length > 2) {
-          const polygon = activeLassoRef.current.map((p) => ({ x: p.x, y: p.y }));
-          const selected = strokes
-            .filter((s) => (s.pageIndex ?? 0) === pageIndex && isStrokeInPolygon(s, polygon))
-            .map((s) => s.id);
-          setSelectedStrokeIds(selected);
-          activeLassoRef.current = [];
-        } else {
-          activeLassoRef.current = [];
-          setSelectedStrokeIds([]);
+    if (tool === 'selector') {
+      if (isDraggingSelectionRef.current) {
+        if (dragDelta.dx !== 0 || dragDelta.dy !== 0) {
+          const updated = strokes.map((s) => {
+            if (selectedStrokeIds.includes(s.id) && (s.pageIndex ?? 0) === pageIndex) {
+              return {
+                ...s,
+                points: s.points.map((p) => ({
+                  ...p,
+                  x: p.x + dragDelta.dx,
+                  y: p.y + dragDelta.dy,
+                })),
+              };
+            }
+            return s;
+          });
+          onChangeStrokes(updated);
         }
-        scheduleRender();
-        return;
+        isDraggingSelectionRef.current = false;
+        dragStartPosRef.current = null;
+        setDragDelta({ dx: 0, dy: 0 });
+      } else if (activeLasso.length > 2) {
+        const polygon = activeLasso.map((p) => ({ x: p.x, y: p.y }));
+        const selected = strokes
+          .filter((s) => (s.pageIndex ?? 0) === pageIndex && isStrokeInPolygon(s, polygon))
+          .map((s) => s.id);
+        setSelectedStrokeIds(selected);
+        setActiveLasso([]);
+      } else {
+        setActiveLasso([]);
+        setSelectedStrokeIds([]);
       }
+      return;
+    }
 
-      // Commit Inking Stroke
-      if (activePointsRef.current.length > 0) {
-        const newStroke: InkStroke = {
-          id: 'stroke-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
-          points: [...activePointsRef.current],
-          color,
-          size,
-          tool,
-          pageIndex,
-          timestamp: Date.now(),
-        };
-        onChangeStrokes([...strokes, newStroke]);
-      }
+    // Commit Inking Stroke
+    if (activePoints.length > 0) {
+      const newStroke: InkStroke = {
+        id: 'stroke-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+        points: [...activePoints],
+        color,
+        size,
+        tool,
+        pageIndex,
+        timestamp: Date.now(),
+      };
+      onChangeStrokes([...strokes, newStroke]);
+    }
 
-      activePointsRef.current = [];
-      scheduleRender();
-    };
+    setActivePoints([]);
+  };
 
-    const onPointerCancel = (e: PointerEvent) => {
-      const { tool, color, size, pageIndex, strokes, onChangeStrokes } = propsRef.current;
-
+  // POINTER CANCEL: Never lose in-progress user work
+  const handlePointerCancel = (e: React.PointerEvent<SVGSVGElement>) => {
+    const svg = svgRef.current;
+    if (svg) {
       try {
-        canvas.releasePointerCapture(e.pointerId);
+        svg.releasePointerCapture(e.pointerId);
       } catch (_) {}
+    }
 
-      // Preserve stroke data on gesture cancel so user never loses written ink
-      if (isDrawingRef.current && activePointsRef.current.length > 0 && tool !== 'eraser' && tool !== 'selector') {
-        const newStroke: InkStroke = {
-          id: 'stroke-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
-          points: [...activePointsRef.current],
-          color,
-          size,
-          tool,
-          pageIndex,
-          timestamp: Date.now(),
-        };
-        onChangeStrokes([...strokes, newStroke]);
-      }
+    if (isDrawingRef.current && activePoints.length > 0 && tool !== 'eraser' && tool !== 'selector') {
+      const newStroke: InkStroke = {
+        id: 'stroke-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+        points: [...activePoints],
+        color,
+        size,
+        tool,
+        pageIndex,
+        timestamp: Date.now(),
+      };
+      onChangeStrokes([...strokes, newStroke]);
+    }
 
-      isDrawingRef.current = false;
-      activePointsRef.current = [];
-      activeLassoRef.current = [];
-      isDraggingSelectionRef.current = false;
-      dragDeltaRef.current = { dx: 0, dy: 0 };
-      scheduleRender();
-    };
-
-    const onContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-    };
-
-    canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
-    canvas.addEventListener('pointermove', onPointerMove, { passive: false });
-    canvas.addEventListener('pointerup', onPointerUp, { passive: false });
-    canvas.addEventListener('pointercancel', onPointerCancel, { passive: false });
-    canvas.addEventListener('contextmenu', onContextMenu);
-
-    return () => {
-      canvas.removeEventListener('pointerdown', onPointerDown);
-      canvas.removeEventListener('pointermove', onPointerMove);
-      canvas.removeEventListener('pointerup', onPointerUp);
-      canvas.removeEventListener('pointercancel', onPointerCancel);
-      canvas.removeEventListener('contextmenu', onContextMenu);
-    };
-  }, [getCanvasCoords, scheduleRender, selectedBounds, selectedStrokeIds]);
+    isDrawingRef.current = false;
+    setActivePoints([]);
+    setActiveLasso([]);
+    isDraggingSelectionRef.current = false;
+    setDragDelta({ dx: 0, dy: 0 });
+  };
 
   // Actions on Selected Strokes
   const handleDeleteSelected = () => {
@@ -578,17 +358,94 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     setSelectedStrokeIds(duplicated.map((d) => d.id));
   };
 
+  // Compute active in-progress SVG path
+  const activeStrokePath = useMemo(() => {
+    if (activePoints.length === 0 || tool === 'eraser' || tool === 'selector') return '';
+    return pointsToSvgPath(activePoints, size, tool);
+  }, [activePoints, size, tool]);
+
+  // Compute lasso polygon points string
+  const lassoPointsString = useMemo(() => {
+    if (activeLasso.length < 2) return '';
+    return activeLasso.map((p) => `${p.x},${p.y}`).join(' ');
+  }, [activeLasso]);
+
   const wrapperClass = className.includes('absolute')
     ? `w-full h-full select-none touch-none ${className}`
     : `relative w-full h-full select-none touch-none ${className}`;
 
   return (
     <div className={wrapperClass} style={{ touchAction: 'none' }}>
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full block cursor-crosshair touch-none select-none"
-        style={{ touchAction: 'none' }}
-      />
+      <svg
+        ref={svgRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onContextMenu={(e) => e.preventDefault()}
+        className="w-full h-full block cursor-crosshair touch-none select-none overflow-hidden"
+        style={{ touchAction: 'none', WebkitUserSelect: 'none' }}
+      >
+        <g transform={`translate(${panX}, ${panY}) scale(${zoom})`}>
+          {/* 1. Committed Page Strokes */}
+          {pageStrokes.map((s) => {
+            const isSelected = selectedStrokeIds.includes(s.id);
+            const dx = isSelected && isDraggingSelectionRef.current ? dragDelta.dx : 0;
+            const dy = isSelected && isDraggingSelectionRef.current ? dragDelta.dy : 0;
+            const pathD = strokePathMap.get(s.id) || '';
+            if (!pathD) return null;
+
+            const strokeColor = getAdaptiveInkColor(s.color, isDark);
+            const opacity = s.tool === 'highlighter' ? 0.35 : (s.opacity ?? 1.0);
+
+            return (
+              <path
+                key={s.id}
+                d={pathD}
+                fill={strokeColor}
+                opacity={opacity}
+                transform={dx !== 0 || dy !== 0 ? `translate(${dx}, ${dy})` : undefined}
+                className="transition-opacity"
+              />
+            );
+          })}
+
+          {/* 2. Active In-Progress Vector Stroke */}
+          {activeStrokePath && (
+            <path
+              d={activeStrokePath}
+              fill={activeAdaptiveColor}
+              opacity={tool === 'highlighter' ? 0.35 : 1.0}
+            />
+          )}
+
+          {/* 3. Active Lasso Selection Polygon */}
+          {lassoPointsString && (
+            <polygon
+              points={lassoPointsString}
+              fill="rgba(99, 102, 241, 0.08)"
+              stroke="#6366f1"
+              strokeWidth={2 / (zoom || 1)}
+              strokeDasharray={`${6 / (zoom || 1)}, ${4 / (zoom || 1)}`}
+            />
+          )}
+
+          {/* 4. Selection Bounding Marquee */}
+          {selectedBounds && tool === 'selector' && (
+            <rect
+              x={selectedBounds.minX + dragDelta.dx - 8 / (zoom || 1)}
+              y={selectedBounds.minY + dragDelta.dy - 8 / (zoom || 1)}
+              width={selectedBounds.maxX - selectedBounds.minX + 16 / (zoom || 1)}
+              height={selectedBounds.maxY - selectedBounds.minY + 16 / (zoom || 1)}
+              fill="none"
+              stroke="#4f46e5"
+              strokeWidth={2 / (zoom || 1)}
+              strokeDasharray={`${6 / (zoom || 1)}, ${4 / (zoom || 1)}`}
+              rx={6 / (zoom || 1)}
+            />
+          )}
+        </g>
+      </svg>
 
       {/* Floating Action Menu for Selected Strokes */}
       {selectedBounds && selectedStrokeIds.length > 0 && tool === 'selector' && (
@@ -607,7 +464,7 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
 
           <button
             onClick={handleDuplicateSelected}
-            className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-200 hover:text-white flex items-center gap-1 transition-colors"
+            className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-200 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
             title="Duplicate Selected Strokes"
           >
             <Copy className="w-3.5 h-3.5 text-indigo-400" />
@@ -616,7 +473,7 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
 
           <button
             onClick={handleDeleteSelected}
-            className="p-1.5 hover:bg-red-950/80 rounded-lg text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors"
+            className="p-1.5 hover:bg-red-950/80 rounded-lg text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors cursor-pointer"
             title="Delete Selected Strokes"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -625,7 +482,7 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
 
           <button
             onClick={() => setSelectedStrokeIds([])}
-            className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white ml-1 transition-colors"
+            className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white ml-1 transition-colors cursor-pointer"
             title="Deselect"
           >
             <X className="w-3.5 h-3.5" />

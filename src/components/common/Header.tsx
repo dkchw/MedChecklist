@@ -20,10 +20,14 @@ import {
   Pen,
   MoreVertical,
   RefreshCw,
+  ChevronDown,
+  User,
+  Check,
 } from 'lucide-react';
 import appLogo from '../../../assets/app-icon.png';
 import { ThemeMode } from '../../utils/theme';
 import { WorkspaceTab, TabType } from '../../types/tab';
+import { PatientEncounter } from '../../types/patient';
 import { APP_VERSION } from '../../version';
 
 interface HeaderProps {
@@ -44,11 +48,15 @@ interface HeaderProps {
   onCheckUpdate?: () => void;
   onOpenSettings?: () => void;
   onOpenInking?: () => void;
+  encounters?: PatientEncounter[];
+  selectedEncounterId?: string;
+  onSelectEncounter?: (encounterId: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   tabs,
   activeTabId,
+  onSelectTab,
   onOpenSidebar,
   onGoHome,
   onOpenFolders,
@@ -63,22 +71,40 @@ export const Header: React.FC<HeaderProps> = ({
   onCheckUpdate,
   onOpenSettings,
   onOpenInking,
+  encounters = [],
+  selectedEncounterId,
+  onSelectEncounter,
 }) => {
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
   const [showMore, setShowMore] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
+  const [showTabDropdown, setShowTabDropdown] = useState(false);
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
 
-  // Close dropdown on outside click
+  const moreRef = useRef<HTMLDivElement>(null);
+  const tabDropdownRef = useRef<HTMLDivElement>(null);
+  const patientDropdownRef = useRef<HTMLDivElement>(null);
+
+  const activeEncounters = encounters.filter((e) => !e.isDeleted);
+  const currentEncounter = encounters.find((e) => e.id === selectedEncounterId && !e.isDeleted);
+
+  // Close dropdowns on outside click
   useEffect(() => {
-    if (!showMore) return;
+    if (!showMore && !showTabDropdown && !showPatientDropdown) return;
     const handler = (e: MouseEvent) => {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (moreRef.current && !moreRef.current.contains(target)) {
         setShowMore(false);
+      }
+      if (tabDropdownRef.current && !tabDropdownRef.current.contains(target)) {
+        setShowTabDropdown(false);
+      }
+      if (patientDropdownRef.current && !patientDropdownRef.current.contains(target)) {
+        setShowPatientDropdown(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [showMore]);
+  }, [showMore, showTabDropdown, showPatientDropdown]);
 
   const getTabIcon = (type: TabType) => {
     switch (type) {
@@ -135,17 +161,147 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
       </div>
 
-      {/* Center: Active Workspace Indicator */}
+      {/* Center: Active Workspace & Patient Dropdowns */}
       <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-        <button
-          type="button"
-          onClick={onOpenSidebar}
-          className="flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl bg-indigo-50/90 dark:bg-indigo-950/70 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 border border-indigo-200/90 dark:border-indigo-800/90 text-sm sm:text-base font-black text-indigo-950 dark:text-indigo-100 shadow-xs truncate cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
-          title="Current Mode — Click to switch workspace"
-        >
-          {getTabIcon(activeTab.type)}
-          <span className="truncate tracking-tight">{activeTab.title}</span>
-        </button>
+        {/* 1. Workspace Tab Dropdown */}
+        <div className="relative" ref={tabDropdownRef}>
+          <button
+            type="button"
+            onClick={() => {
+              setShowTabDropdown(!showTabDropdown);
+              setShowPatientDropdown(false);
+            }}
+            className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl bg-indigo-50/90 dark:bg-indigo-950/70 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 border border-indigo-200/90 dark:border-indigo-800/90 text-xs sm:text-sm font-black text-indigo-950 dark:text-indigo-100 shadow-xs truncate cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
+            title="Switch Workspace"
+          >
+            {getTabIcon(activeTab.type)}
+            <span className="truncate tracking-tight">{activeTab.title}</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-indigo-500 transition-transform ${showTabDropdown ? 'rotate-180' : ''}`} />
+          </button>
+
+          {showTabDropdown && (
+            <div className="absolute left-0 mt-2 w-64 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+              <div className="px-3.5 py-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                Workspaces
+              </div>
+              <div className="divide-y divide-slate-100/60 dark:divide-slate-800/60">
+                {tabs.map((tab) => {
+                  const isActive = tab.id === activeTabId;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => {
+                        onSelectTab(tab.id);
+                        setShowTabDropdown(false);
+                      }}
+                      className={`w-full text-left px-3.5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center justify-between gap-2.5 cursor-pointer ${
+                        isActive ? 'bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 font-bold' : 'text-slate-700 dark:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {getTabIcon(tab.type)}
+                        <span className="text-xs sm:text-sm font-semibold truncate">{tab.title}</span>
+                      </div>
+                      {isActive && <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 2. Patient Quick Switcher Dropdown */}
+        {activeEncounters.length > 0 && (
+          <div className="relative" ref={patientDropdownRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setShowPatientDropdown(!showPatientDropdown);
+                setShowTabDropdown(false);
+              }}
+              className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-2xl bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200/80 dark:border-slate-700 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 shadow-xs cursor-pointer transition-all max-w-[130px] xs:max-w-[170px] sm:max-w-[210px]"
+              title="Quickly switch between patients"
+            >
+              <User className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+              <span className="truncate">
+                {currentEncounter ? currentEncounter.patientIdentifier : 'All Patients'}
+              </span>
+              {currentEncounter?.bedNumber && (
+                <span className="text-[10px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 px-1 rounded hidden xs:inline shrink-0 font-mono">
+                  B{currentEncounter.bedNumber}
+                </span>
+              )}
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${showPatientDropdown ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showPatientDropdown && (
+              <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 py-2 z-50 animate-in fade-in slide-in-from-top-2 max-h-[70vh] flex flex-col">
+                <div className="px-3.5 py-1.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 font-semibold">
+                  <span>Patients ({activeEncounters.length})</span>
+                  {onSelectEncounter && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelectEncounter('');
+                        setShowPatientDropdown(false);
+                      }}
+                      className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                    >
+                      File Explorer
+                    </button>
+                  )}
+                </div>
+
+                <div className="overflow-y-auto flex-1 divide-y divide-slate-100/60 dark:divide-slate-800/60">
+                  {activeEncounters.map((enc) => {
+                    const isSelected = enc.id === selectedEncounterId;
+                    return (
+                      <button
+                        key={enc.id}
+                        type="button"
+                        onClick={() => {
+                          if (onSelectEncounter) onSelectEncounter(enc.id);
+                          if (activeTab.type !== 'encounters') {
+                            const encTab = tabs.find((t) => t.type === 'encounters');
+                            if (encTab) onSelectTab(encTab.id);
+                          }
+                          setShowPatientDropdown(false);
+                        }}
+                        className={`w-full text-left px-3.5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center justify-between gap-2 cursor-pointer ${
+                          isSelected ? 'bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 font-bold' : ''
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs sm:text-sm font-semibold truncate flex items-center gap-1.5">
+                            <span>{enc.patientIdentifier}</span>
+                            {enc.bedNumber && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-100/70 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                                Bed {enc.bedNumber}
+                              </span>
+                            )}
+                            {enc.group && (
+                              <span className="text-[10px] text-slate-400">
+                                ({enc.group})
+                              </span>
+                            )}
+                          </div>
+                          {enc.chiefComplaint && (
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                              {enc.chiefComplaint}
+                            </p>
+                          )}
+                        </div>
+                        {isSelected && <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Right: Search + Inking + More */}

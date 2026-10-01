@@ -21,6 +21,7 @@ import {
   Image as ImageIcon,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Maximize2,
   Move,
   ZoomIn,
@@ -34,6 +35,8 @@ import { HandwritingOcrService } from '../../utils/handwritingOcr';
 
 interface PatientFacingModeProps {
   encounter: PatientEncounter;
+  allEncounters?: PatientEncounter[];
+  onSelectEncounter?: (encounterId: string) => void;
   onUpdateEncounter: (updated: PatientEncounter) => void;
   onExit: () => void;
   onOpenLlmModal: () => void;
@@ -42,6 +45,8 @@ interface PatientFacingModeProps {
 
 export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
   encounter,
+  allEncounters,
+  onSelectEncounter,
   onUpdateEncounter,
   onExit,
   onOpenLlmModal,
@@ -53,6 +58,8 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
   const [isPenMode, setIsPenMode] = useState<boolean>(true);
   const [canvasLayout, setCanvasLayout] = useState<'whiteboard' | 'sheet'>('whiteboard');
   const [whiteboardPattern, setWhiteboardPattern] = useState<'blank' | 'grid' | 'dots' | 'ruled'>('grid');
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const patientDropdownRef = useRef<HTMLDivElement>(null);
   const [currentTool, setCurrentTool] = useState<PenTool>('pen');
   const [currentColor, setCurrentColor] = useState<string>(isDark ? '#f8fafc' : '#0f172a');
   const [currentSize, setCurrentSize] = useState<number>(3);
@@ -110,6 +117,18 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
       setOcrTranscribing(false);
     }
   };
+
+  // Close patient dropdown on outside click
+  useEffect(() => {
+    if (!showPatientDropdown) return;
+    const handler = (e: MouseEvent) => {
+      if (patientDropdownRef.current && !patientDropdownRef.current.contains(e.target as Node)) {
+        setShowPatientDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showPatientDropdown]);
 
   // Sync pen color when theme changes
   useEffect(() => {
@@ -442,24 +461,85 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
 
           <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
 
-          {/* Patient Details */}
-          <div>
-            <div className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <span>{encounter.patientIdentifier}</span>
-              {encounter.bedNumber && (
-                <span className="text-[11px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-900">
-                  Bed {encounter.bedNumber}
-                </span>
+          {/* Patient Details & Quick Dropdown Switcher */}
+          <div className="relative" ref={patientDropdownRef}>
+            <button
+              type="button"
+              onClick={() => {
+                if (allEncounters && allEncounters.length > 1) {
+                  setShowPatientDropdown(!showPatientDropdown);
+                }
+              }}
+              className={`text-left group ${allEncounters && allEncounters.length > 1 ? 'cursor-pointer' : 'cursor-default'}`}
+              title={allEncounters && allEncounters.length > 1 ? 'Click to switch patient inking sheet' : undefined}
+            >
+              <div className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                <span>{encounter.patientIdentifier}</span>
+                {encounter.bedNumber && (
+                  <span className="text-[11px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-900 font-mono">
+                    Bed {encounter.bedNumber}
+                  </span>
+                )}
+                {encounter.group && (
+                  <span className="text-[11px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium px-2 py-0.5 rounded-md">
+                    {encounter.group}
+                  </span>
+                )}
+                {allEncounters && allEncounters.length > 1 && (
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${showPatientDropdown ? 'rotate-180' : ''}`} />
+                )}
+              </div>
+              {encounter.chiefComplaint && (
+                <div className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-xs sm:max-w-md">
+                  Complaint: {encounter.chiefComplaint}
+                </div>
               )}
-              {encounter.group && (
-                <span className="text-[11px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium px-2 py-0.5 rounded-md">
-                  {encounter.group}
-                </span>
-              )}
-            </div>
-            {encounter.chiefComplaint && (
-              <div className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-sm sm:max-w-md">
-                Complaint: {encounter.chiefComplaint}
+            </button>
+
+            {/* Quick Switch Patient Dropdown Menu */}
+            {showPatientDropdown && allEncounters && allEncounters.length > 1 && (
+              <div className="absolute left-0 mt-2 w-72 sm:w-80 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 py-2 z-50 animate-in fade-in slide-in-from-top-2 max-h-[60vh] overflow-y-auto divide-y divide-slate-100/60 dark:divide-slate-800/60">
+                <div className="px-3.5 py-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                  Switch Inking Sheet ({allEncounters.length} patients)
+                </div>
+                {allEncounters.map((enc) => {
+                  const isCurrent = enc.id === encounter.id;
+                  return (
+                    <button
+                      key={enc.id}
+                      type="button"
+                      onClick={() => {
+                        if (onSelectEncounter) onSelectEncounter(enc.id);
+                        setShowPatientDropdown(false);
+                      }}
+                      className={`w-full text-left px-3.5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center justify-between gap-2 cursor-pointer ${
+                        isCurrent ? 'bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 font-bold' : ''
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="text-xs sm:text-sm font-semibold truncate flex items-center gap-1.5">
+                          <span>{enc.patientIdentifier}</span>
+                          {enc.bedNumber && (
+                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-100/70 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                              Bed {enc.bedNumber}
+                            </span>
+                          )}
+                          {enc.group && (
+                            <span className="text-[10px] text-slate-400">
+                              ({enc.group})
+                            </span>
+                          )}
+                        </div>
+                        {enc.chiefComplaint && (
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                            {enc.chiefComplaint}
+                          </p>
+                        )}
+                      </div>
+                      {isCurrent && <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

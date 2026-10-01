@@ -438,6 +438,8 @@ export function App() {
     return (
       <PatientFacingMode
         encounter={currentEncounter}
+        allEncounters={encounters.filter((e) => !e.isDeleted)}
+        onSelectEncounter={(id) => setSelectedEncounterId(id)}
         onUpdateEncounter={handleUpdateEncounter}
         onExit={() => setIsBedsideMode(false)}
         onOpenLlmModal={() => setLlmTarget({ encounter: currentEncounter })}
@@ -534,6 +536,9 @@ export function App() {
         onCheckUpdate={handleCheckUpdate}
         onOpenSettings={() => setShowSettingsModal(true)}
         onOpenInking={handleOpenInkingMode}
+        encounters={encounters}
+        selectedEncounterId={selectedEncounterId || undefined}
+        onSelectEncounter={(id) => setSelectedEncounterId(id || null)}
       />
 
       <SidebarDrawer
