@@ -1,0 +1,5 @@
+/run/host/home/dkchw/Documents/Code/Ongoing/Repo/MedChecklist/native_rewrite/desktop_qt/build/CMakeFiles/MedChecklistDesktop.dir
+/run/host/home/dkchw/Documents/Code/Ongoing/Repo/MedChecklist/native_rewrite/desktop_qt/build/CMakeFiles/edit_cache.dir
+/run/host/home/dkchw/Documents/Code/Ongoing/Repo/MedChecklist/native_rewrite/desktop_qt/build/CMakeFiles/rebuild_cache.dir
+/run/host/home/dkchw/Documents/Code/Ongoing/Repo/MedChecklist/native_rewrite/desktop_qt/build/CMakeFiles/MedChecklistDesktop_autogen_timestamp_deps.dir
+/run/host/home/dkchw/Documents/Code/Ongoing/Repo/MedChecklist/native_rewrite/desktop_qt/build/CMakeFiles/MedChecklistDesktop_autogen.dir
