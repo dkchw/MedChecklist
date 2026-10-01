@@ -11,8 +11,8 @@ android {
         applicationId = "com.medchecklist.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 24
-        versionName = "1.3.0"
+        versionCode = 25
+        versionName = "1.3.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -26,6 +26,7 @@ android {
             enableV1Signing = true
             enableV2Signing = true
             enableV3Signing = true
+            enableV4Signing = true
         }
     }
 

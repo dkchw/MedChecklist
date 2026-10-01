@@ -21,49 +21,89 @@ export function drawStrokeOnCanvas(
 ) {
   if (!stroke.points || stroke.points.length === 0) return;
 
-  const hasHardwarePressure = stroke.points.some(
-    (p) => p.pressure !== undefined && p.pressure > 0 && p.pressure !== 0.5
-  );
-
-  const points = stroke.points.map((p) => {
-    const pres = p.pressure && p.pressure > 0 ? Math.max(0.12, Math.min(1.0, p.pressure)) : 0.5;
-    return [p.x * scale, p.y * scale, pres];
-  });
-
-  const outline = getStroke(points, {
-    size: stroke.size * scale,
-    thinning: stroke.tool === 'highlighter' ? 0 : 0.6,
-    smoothing: 0.72,
-    streamline: 0.58,
-    simulatePressure: !hasHardwarePressure,
-    start: {
-      taper: stroke.tool === 'highlighter' ? 0 : stroke.size * scale * 0.4,
-      cap: true,
-    },
-    end: {
-      taper: stroke.tool === 'highlighter' ? 0 : stroke.size * scale * 0.4,
-      cap: true,
-    },
-  });
-
-  const pathData = getSvgPathFromStroke(outline);
-  if (!pathData) return;
-
-  const path = new Path2D(pathData);
-
-  ctx.save();
   const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
   const renderColor = getAdaptiveInkColor(stroke.color, isDark);
+
+  ctx.save();
 
   if (stroke.tool === 'highlighter') {
     ctx.globalAlpha = 0.35;
     ctx.fillStyle = renderColor;
+    ctx.strokeStyle = renderColor;
   } else {
     ctx.globalAlpha = stroke.opacity ?? 1.0;
     ctx.fillStyle = renderColor;
+    ctx.strokeStyle = renderColor;
   }
 
-  ctx.fill(path);
+  // Handle single-point dot (tap)
+  if (stroke.points.length === 1) {
+    const pt = stroke.points[0];
+    const r = Math.max(1, (stroke.size * scale) / 2);
+    ctx.beginPath();
+    ctx.arc(pt.x * scale, pt.y * scale, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  // Generate smooth polygon outline with perfect-freehand
+  try {
+    const hasHardwarePressure = stroke.points.some(
+      (p) => p.pressure !== undefined && p.pressure > 0 && p.pressure !== 0.5
+    );
+
+    const points = stroke.points.map((p) => {
+      const pres = p.pressure && p.pressure > 0 ? Math.max(0.12, Math.min(1.0, p.pressure)) : 0.5;
+      return [p.x * scale, p.y * scale, pres];
+    });
+
+    const outline = getStroke(points, {
+      size: stroke.size * scale,
+      thinning: stroke.tool === 'highlighter' ? 0 : 0.6,
+      smoothing: 0.72,
+      streamline: 0.58,
+      simulatePressure: !hasHardwarePressure,
+      start: {
+        taper: stroke.tool === 'highlighter' ? 0 : stroke.size * scale * 0.4,
+        cap: true,
+      },
+      end: {
+        taper: stroke.tool === 'highlighter' ? 0 : stroke.size * scale * 0.4,
+        cap: true,
+      },
+    });
+
+    if (outline && outline.length >= 3) {
+      ctx.beginPath();
+      ctx.moveTo(outline[0][0], outline[0][1]);
+      for (let i = 1; i < outline.length; i++) {
+        ctx.lineTo(outline[i][0], outline[i][1]);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+  } catch (_) {
+    // Fallback to native Bézier curve stroke below
+  }
+
+  // Direct quadratic Bézier path fail-safe fallback
+  ctx.lineWidth = stroke.size * scale;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  const pts = stroke.points;
+  ctx.moveTo(pts[0].x * scale, pts[0].y * scale);
+  for (let i = 1; i < pts.length; i++) {
+    const midX = ((pts[i - 1].x + pts[i].x) / 2) * scale;
+    const midY = ((pts[i - 1].y + pts[i].y) / 2) * scale;
+    ctx.quadraticCurveTo(pts[i - 1].x * scale, pts[i - 1].y * scale, midX, midY);
+  }
+  ctx.lineTo(pts[pts.length - 1].x * scale, pts[pts.length - 1].y * scale);
+  ctx.stroke();
+
   ctx.restore();
 }
 

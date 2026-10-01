@@ -1,7 +1,7 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { InkStroke, PenTool, StrokePoint } from '../../types/ink';
 import { drawStrokeOnCanvas, isPointNearStroke, isStrokeInPolygon } from '../../utils/inkUtils';
-import { Copy, Trash2, X, Move } from 'lucide-react';
+import { Copy, Trash2, X } from 'lucide-react';
 
 interface PenCanvasProps {
   strokes: InkStroke[];
@@ -41,7 +41,7 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
   const bufferCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafIdRef = useRef<number | null>(null);
 
-  // Active in-progress stroke points kept in ref for 0-lag 120 FPS rendering without React re-renders
+  // Active in-progress stroke points kept in ref for zero-lag 120 FPS rendering
   const activePointsRef = useRef<StrokePoint[]>([]);
   const isDrawingRef = useRef(false);
 
@@ -52,11 +52,43 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
   const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
   const dragDeltaRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
 
-  // Filter strokes belonging to current page
-  const pageStrokes = strokes.filter((s) => (s.pageIndex ?? 0) === pageIndex);
+  // Refs for current props to avoid stale closures in native DOM event listeners
+  const propsRef = useRef({
+    strokes,
+    onChangeStrokes,
+    tool,
+    color,
+    size,
+    pageIndex,
+    panX,
+    panY,
+    zoom,
+    penOnlyMode,
+  });
+
+  useEffect(() => {
+    propsRef.current = {
+      strokes,
+      onChangeStrokes,
+      tool,
+      color,
+      size,
+      pageIndex,
+      panX,
+      panY,
+      zoom,
+      penOnlyMode,
+    };
+  });
+
+  // Filter strokes belonging to current page (memoized)
+  const pageStrokes = useMemo(
+    () => strokes.filter((s) => (s.pageIndex ?? 0) === pageIndex),
+    [strokes, pageIndex]
+  );
 
   // Calculate tight bounding box of selected strokes
-  const getSelectedBounds = (): SelectionBounds | null => {
+  const selectedBounds = useMemo((): SelectionBounds | null => {
     if (selectedStrokeIds.length === 0) return null;
     let minX = Infinity,
       minY = Infinity,
@@ -74,9 +106,7 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     }
     if (minX === Infinity) return null;
     return { minX, minY, maxX, maxY };
-  };
-
-  const selectedBounds = getSelectedBounds();
+  }, [pageStrokes, selectedStrokeIds]);
 
   // Convert client pointer coordinates to canvas virtual coordinate space
   const getCanvasCoords = useCallback(
@@ -84,16 +114,17 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
       const canvas = canvasRef.current;
       if (!canvas) return { x: 0, y: 0 };
       const rect = canvas.getBoundingClientRect();
-      const scaleX = rect.width > 0 ? (canvas.clientWidth || rect.width) / rect.width : 1;
-      const scaleY = rect.height > 0 ? (canvas.clientHeight || rect.height) / rect.height : 1;
-      const localX = (clientX - rect.left) * scaleX;
-      const localY = (clientY - rect.top) * scaleY;
+      const localX = clientX - rect.left;
+      const localY = clientY - rect.top;
+      const pX = propsRef.current.panX;
+      const pY = propsRef.current.panY;
+      const zm = propsRef.current.zoom || 1;
       return {
-        x: (localX - panX) / (zoom || 1),
-        y: (localY - panY) / (zoom || 1),
+        x: (localX - pX) / zm,
+        y: (localY - pY) / zm,
       };
     },
-    [panX, panY, zoom]
+    []
   );
 
   // 1. Render all committed strokes to the background buffer canvas
@@ -141,7 +172,7 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Blit pre-rendered background buffer in 1 hardware-accelerated drawImage call
-    if (buffer) {
+    if (buffer && buffer.width > 0 && buffer.height > 0) {
       ctx.drawImage(buffer, 0, 0);
     }
 
@@ -184,8 +215,8 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     const lasso = activeLassoRef.current;
     if (lasso.length > 1) {
       ctx.strokeStyle = '#6366f1';
-      ctx.lineWidth = 2 / zoom;
-      ctx.setLineDash([6 / zoom, 4 / zoom]);
+      ctx.lineWidth = 2 / (zoom || 1);
+      ctx.setLineDash([6 / (zoom || 1), 4 / (zoom || 1)]);
       ctx.beginPath();
       ctx.moveTo(lasso[0].x, lasso[0].y);
       for (let i = 1; i < lasso.length; i++) {
@@ -202,9 +233,9 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     // Render selection dashed marquee box
     if (selectedBounds && tool === 'selector') {
       ctx.strokeStyle = '#4f46e5';
-      ctx.lineWidth = 2 / zoom;
-      ctx.setLineDash([6 / zoom, 4 / zoom]);
-      const pad = 8 / zoom;
+      ctx.lineWidth = 2 / (zoom || 1);
+      ctx.setLineDash([6 / (zoom || 1), 4 / (zoom || 1)]);
+      const pad = 8 / (zoom || 1);
       const { dx, dy } = dragDeltaRef.current;
       ctx.strokeRect(
         selectedBounds.minX + dx - pad,
@@ -227,7 +258,7 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     });
   }, [renderDisplay]);
 
-  // Setup HiDPI Canvas Dimensions
+  // Setup HiDPI Canvas Dimensions & Resize Observer
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -237,15 +268,15 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
       const dpr = window.devicePixelRatio || 1;
       const cssW = canvas.clientWidth || rect.width || 300;
       const cssH = canvas.clientHeight || rect.height || 300;
-      const newWidth = Math.round(cssW * dpr);
-      const newHeight = Math.round(cssH * dpr);
+      const newWidth = Math.max(1, Math.round(cssW * dpr));
+      const newHeight = Math.max(1, Math.round(cssH * dpr));
 
       if (canvas.width !== newWidth || canvas.height !== newHeight) {
         canvas.width = newWidth;
         canvas.height = newHeight;
+        updateBackgroundBuffer();
+        renderDisplay();
       }
-      updateBackgroundBuffer();
-      renderDisplay();
     };
 
     updateDimensions();
@@ -259,39 +290,6 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
       }
     };
   }, [updateBackgroundBuffer, renderDisplay]);
-
-  // CRITICAL: Prevent browser from hijacking touch/pen events as scroll/gesture.
-  // CSS touch-action:none is NOT sufficient on Android WebView — JS-level preventDefault()
-  // on touchstart/touchmove is required to stop the gesture recognizer from firing
-  // pointercancel events which kill in-progress strokes.
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const preventTouch = (e: TouchEvent) => {
-      // Only prevent default when we're actively drawing or the tool requires it
-      if (e.cancelable) {
-        e.preventDefault();
-      }
-    };
-
-    const preventContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-    };
-
-    // { passive: false } is required to allow preventDefault() in touch handlers
-    canvas.addEventListener('touchstart', preventTouch, { passive: false });
-    canvas.addEventListener('touchmove', preventTouch, { passive: false });
-    canvas.addEventListener('touchend', preventTouch, { passive: false });
-    canvas.addEventListener('contextmenu', preventContextMenu);
-
-    return () => {
-      canvas.removeEventListener('touchstart', preventTouch);
-      canvas.removeEventListener('touchmove', preventTouch);
-      canvas.removeEventListener('touchend', preventTouch);
-      canvas.removeEventListener('contextmenu', preventContextMenu);
-    };
-  }, []);
 
   // Update background buffer whenever committed strokes or viewport transform changes
   useEffect(() => {
@@ -310,93 +308,48 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
   }, [updateBackgroundBuffer, renderDisplay]);
 
   // Helper to detect if stylus barrel / eraser button is currently pressed
-  const isPenEraserActive = (e: React.PointerEvent<HTMLCanvasElement> | PointerEvent): boolean => {
+  const isPenEraserActive = (e: PointerEvent): boolean => {
     return (
-      (e.pointerType as string) === 'eraser' ||
-      ((e.pointerType as string) === 'pen' &&
+      e.pointerType === 'eraser' ||
+      (e.pointerType === 'pen' &&
         ((e.buttons & 2) !== 0 ||
           (e.buttons & 4) !== 0 ||
           (e.buttons & 32) !== 0 ||
           e.button === 2 ||
           e.button === 5 ||
-          (e as any).altKey))
+          e.altKey))
     );
   };
 
-  // Pointer Down
-  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    // Palm Rejection Guard
-    if (penOnlyMode && (e.pointerType as string) !== 'pen' && (e.pointerType as string) !== 'eraser') {
-      return;
-    }
-
+  // NATIVE DOM POINTER EVENT PIPELINE:
+  // Using direct DOM listeners with { passive: false } ensures 100% reliable touch & stylus capture
+  // on Android WebView, iOS Safari, desktop browsers, avoiding React synthetic event bubbling quirks.
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    try {
-      canvas.setPointerCapture(e.pointerId);
-    } catch (_) {}
+    const onPointerDown = (e: PointerEvent) => {
+      const { penOnlyMode, tool, size, pageIndex, strokes, onChangeStrokes } = propsRef.current;
 
-    if (e.cancelable) {
-      e.preventDefault();
-    }
-
-    isDrawingRef.current = true;
-
-    const { x, y } = getCanvasCoords(e.clientX, e.clientY);
-    const pressure = e.pressure && e.pressure > 0 ? Math.max(0.12, Math.min(1.0, e.pressure)) : 0.5;
-
-    const isEraser = tool === 'eraser' || isPenEraserActive(e);
-
-    if (isEraser) {
-      activePointsRef.current = [];
-      const remaining = strokes.filter(
-        (s) => (s.pageIndex ?? 0) !== pageIndex || !isPointNearStroke({ x, y }, s, size * 2.5)
-      );
-      if (remaining.length !== strokes.length) {
-        onChangeStrokes(remaining);
+      // Palm Rejection Guard
+      if (penOnlyMode && e.pointerType !== 'pen' && e.pointerType !== 'eraser') {
+        return;
       }
-      scheduleRender();
-    } else if (tool === 'selector') {
-      if (
-        selectedBounds &&
-        x >= selectedBounds.minX - 12 &&
-        x <= selectedBounds.maxX + 12 &&
-        y >= selectedBounds.minY - 12 &&
-        y <= selectedBounds.maxY + 12
-      ) {
-        isDraggingSelectionRef.current = true;
-        dragStartPosRef.current = { x, y };
-        dragDeltaRef.current = { dx: 0, dy: 0 };
-      } else {
-        setSelectedStrokeIds([]);
-        activeLassoRef.current = [{ x, y, pressure }];
-        scheduleRender();
+
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch (_) {}
+
+      if (e.cancelable) {
+        e.preventDefault();
       }
-    } else {
-      activePointsRef.current = [{ x, y, pressure }];
-      scheduleRender();
-    }
-  };
 
-  // Pointer Move (Zero-Lag with Coalesced Events & RAF Scheduling)
-  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (penOnlyMode && (e.pointerType as string) !== 'pen' && (e.pointerType as string) !== 'eraser') return;
-    if (!isDrawingRef.current) return;
-    if (e.cancelable) {
-      e.preventDefault();
-    }
+      isDrawingRef.current = true;
 
-    // Use coalesced events to capture full digitizer sample rate without latency
-    const coalescedEvents = (e.nativeEvent as any).getCoalescedEvents
-      ? (e.nativeEvent as any).getCoalescedEvents()
-      : [e];
+      const { x, y } = getCanvasCoords(e.clientX, e.clientY);
+      const pressure = e.pressure && e.pressure > 0 ? Math.max(0.12, Math.min(1.0, e.pressure)) : 0.5;
 
-    for (const ev of coalescedEvents) {
-      const { x, y } = getCanvasCoords(ev.clientX, ev.clientY);
-      const pressure = ev.pressure && ev.pressure > 0 ? Math.max(0.12, Math.min(1.0, ev.pressure)) : 0.5;
-
-      const isEraser = tool === 'eraser' || isPenEraserActive(ev);
+      const isEraser = tool === 'eraser' || isPenEraserActive(e);
 
       if (isEraser) {
         activePointsRef.current = [];
@@ -408,107 +361,197 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
         }
         scheduleRender();
       } else if (tool === 'selector') {
-        if (isDraggingSelectionRef.current && dragStartPosRef.current) {
-          dragDeltaRef.current = {
-            dx: x - dragStartPosRef.current.x,
-            dy: y - dragStartPosRef.current.y,
-          };
-          scheduleRender();
-        } else if (activeLassoRef.current.length > 0) {
-          activeLassoRef.current.push({ x, y, pressure });
+        const bounds = selectedBounds;
+        if (
+          bounds &&
+          x >= bounds.minX - 12 &&
+          x <= bounds.maxX + 12 &&
+          y >= bounds.minY - 12 &&
+          y <= bounds.maxY + 12
+        ) {
+          isDraggingSelectionRef.current = true;
+          dragStartPosRef.current = { x, y };
+          dragDeltaRef.current = { dx: 0, dy: 0 };
+        } else {
+          setSelectedStrokeIds([]);
+          activeLassoRef.current = [{ x, y, pressure }];
           scheduleRender();
         }
       } else {
-        activePointsRef.current.push({ x, y, pressure });
+        activePointsRef.current = [{ x, y, pressure }];
         scheduleRender();
       }
-    }
-  };
+    };
 
-  // Pointer Up (Commit Stroke Once)
-  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (penOnlyMode && (e.pointerType as string) !== 'pen' && (e.pointerType as string) !== 'eraser') return;
-    isDrawingRef.current = false;
+    const onPointerMove = (e: PointerEvent) => {
+      const { penOnlyMode, tool, size, pageIndex, strokes, onChangeStrokes } = propsRef.current;
 
-    const isEraser = tool === 'eraser' || isPenEraserActive(e);
-    if (isEraser) {
-      activePointsRef.current = [];
-      scheduleRender();
-      return;
-    }
+      if (!isDrawingRef.current) return;
+      if (penOnlyMode && e.pointerType !== 'pen' && e.pointerType !== 'eraser') return;
 
-    if (tool === 'selector') {
-      if (isDraggingSelectionRef.current) {
-        const { dx, dy } = dragDeltaRef.current;
-        if (dx !== 0 || dy !== 0) {
-          const updated = strokes.map((s) => {
-            if (selectedStrokeIds.includes(s.id) && (s.pageIndex ?? 0) === pageIndex) {
-              return {
-                ...s,
-                points: s.points.map((p) => ({
-                  ...p,
-                  x: p.x + dx,
-                  y: p.y + dy,
-                })),
-              };
-            }
-            return s;
-          });
-          onChangeStrokes(updated);
-        }
-        isDraggingSelectionRef.current = false;
-        dragStartPosRef.current = null;
-        dragDeltaRef.current = { dx: 0, dy: 0 };
-        scheduleRender();
-      } else if (activeLassoRef.current.length > 2) {
-        const lasso = activeLassoRef.current;
-        const selectedIds: string[] = [];
-        for (const s of pageStrokes) {
-          if (isStrokeInPolygon(s, lasso)) {
-            selectedIds.push(s.id);
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+
+      // Capture all high-frequency digitizer samples via coalesced events if available
+      const coalescedEvents = (e as any).getCoalescedEvents
+        ? (e as any).getCoalescedEvents()
+        : [e];
+
+      for (const ev of coalescedEvents) {
+        const { x, y } = getCanvasCoords(ev.clientX, ev.clientY);
+        const pressure = ev.pressure && ev.pressure > 0 ? Math.max(0.12, Math.min(1.0, ev.pressure)) : 0.5;
+
+        const isEraser = tool === 'eraser' || isPenEraserActive(ev);
+
+        if (isEraser) {
+          activePointsRef.current = [];
+          const remaining = strokes.filter(
+            (s) => (s.pageIndex ?? 0) !== pageIndex || !isPointNearStroke({ x, y }, s, size * 2.5)
+          );
+          if (remaining.length !== strokes.length) {
+            onChangeStrokes(remaining);
           }
-        }
-        setSelectedStrokeIds(selectedIds);
-        activeLassoRef.current = [];
-        scheduleRender();
-      } else {
-        activeLassoRef.current = [];
-        scheduleRender();
-      }
-    } else if (activePointsRef.current.length > 0) {
-      // Check if stylus tapped or ticked a checklist item element underneath
-      const elements = typeof document !== 'undefined' ? document.elementsFromPoint(e.clientX, e.clientY) : [];
-      let checkedItem = false;
-      for (const el of elements) {
-        if (el === canvasRef.current) continue;
-        const target = el.closest('[data-checklist-item]');
-        if (target) {
-          (target as HTMLElement).click();
-          checkedItem = true;
-          break;
+          scheduleRender();
+        } else if (tool === 'selector') {
+          if (isDraggingSelectionRef.current && dragStartPosRef.current) {
+            dragDeltaRef.current = {
+              dx: x - dragStartPosRef.current.x,
+              dy: y - dragStartPosRef.current.y,
+            };
+            scheduleRender();
+          } else if (activeLassoRef.current.length > 0) {
+            activeLassoRef.current.push({ x, y, pressure });
+            scheduleRender();
+          }
+        } else {
+          activePointsRef.current.push({ x, y, pressure });
+          scheduleRender();
         }
       }
+    };
 
-      // If it was a quick tap or small tick that successfully toggled the item, clean up without committing stray ink mark
-      if (checkedItem && activePointsRef.current.length <= 8) {
+    const onPointerUp = (e: PointerEvent) => {
+      const { penOnlyMode, tool, color, size, pageIndex, strokes, onChangeStrokes } = propsRef.current;
+
+      if (penOnlyMode && e.pointerType !== 'pen' && e.pointerType !== 'eraser') return;
+      if (!isDrawingRef.current) return;
+
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch (_) {}
+
+      isDrawingRef.current = false;
+
+      const isEraser = tool === 'eraser' || isPenEraserActive(e);
+      if (isEraser) {
         activePointsRef.current = [];
         scheduleRender();
         return;
       }
 
-      const newStroke: InkStroke = {
-        id: 'stroke-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
-        points: [...activePointsRef.current],
-        color,
-        size,
-        tool,
-        pageIndex,
-        timestamp: Date.now(),
-      };
+      if (tool === 'selector') {
+        if (isDraggingSelectionRef.current) {
+          const { dx, dy } = dragDeltaRef.current;
+          if (dx !== 0 || dy !== 0) {
+            const updated = strokes.map((s) => {
+              if (selectedStrokeIds.includes(s.id) && (s.pageIndex ?? 0) === pageIndex) {
+                return {
+                  ...s,
+                  points: s.points.map((p) => ({
+                    ...p,
+                    x: p.x + dx,
+                    y: p.y + dy,
+                  })),
+                };
+              }
+              return s;
+            });
+            onChangeStrokes(updated);
+          }
+          isDraggingSelectionRef.current = false;
+          dragStartPosRef.current = null;
+          dragDeltaRef.current = { dx: 0, dy: 0 };
+        } else if (activeLassoRef.current.length > 2) {
+          const polygon = activeLassoRef.current.map((p) => ({ x: p.x, y: p.y }));
+          const selected = strokes
+            .filter((s) => (s.pageIndex ?? 0) === pageIndex && isStrokeInPolygon(s, polygon))
+            .map((s) => s.id);
+          setSelectedStrokeIds(selected);
+          activeLassoRef.current = [];
+        } else {
+          activeLassoRef.current = [];
+          setSelectedStrokeIds([]);
+        }
+        scheduleRender();
+        return;
+      }
+
+      // Commit Inking Stroke
+      if (activePointsRef.current.length > 0) {
+        const newStroke: InkStroke = {
+          id: 'stroke-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+          points: [...activePointsRef.current],
+          color,
+          size,
+          tool,
+          pageIndex,
+          timestamp: Date.now(),
+        };
+        onChangeStrokes([...strokes, newStroke]);
+      }
+
       activePointsRef.current = [];
-      onChangeStrokes([...strokes, newStroke]);
-    }
-  };
+      scheduleRender();
+    };
+
+    const onPointerCancel = (e: PointerEvent) => {
+      const { tool, color, size, pageIndex, strokes, onChangeStrokes } = propsRef.current;
+
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch (_) {}
+
+      // Preserve stroke data on gesture cancel so user never loses written ink
+      if (isDrawingRef.current && activePointsRef.current.length > 0 && tool !== 'eraser' && tool !== 'selector') {
+        const newStroke: InkStroke = {
+          id: 'stroke-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+          points: [...activePointsRef.current],
+          color,
+          size,
+          tool,
+          pageIndex,
+          timestamp: Date.now(),
+        };
+        onChangeStrokes([...strokes, newStroke]);
+      }
+
+      isDrawingRef.current = false;
+      activePointsRef.current = [];
+      activeLassoRef.current = [];
+      isDraggingSelectionRef.current = false;
+      dragDeltaRef.current = { dx: 0, dy: 0 };
+      scheduleRender();
+    };
+
+    const onContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
+    canvas.addEventListener('pointermove', onPointerMove, { passive: false });
+    canvas.addEventListener('pointerup', onPointerUp, { passive: false });
+    canvas.addEventListener('pointercancel', onPointerCancel, { passive: false });
+    canvas.addEventListener('contextmenu', onContextMenu);
+
+    return () => {
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointercancel', onPointerCancel);
+      canvas.removeEventListener('contextmenu', onContextMenu);
+    };
+  }, [getCanvasCoords, scheduleRender, selectedBounds, selectedStrokeIds]);
 
   // Actions on Selected Strokes
   const handleDeleteSelected = () => {
@@ -543,32 +586,7 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     <div className={wrapperClass} style={{ touchAction: 'none' }}>
       <canvas
         ref={canvasRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onContextMenu={(e) => e.preventDefault()}
-        onPointerCancel={() => {
-          // Commit in-flight stroke if valid to prevent gesture cancellation data loss on Android
-          if (isDrawingRef.current && activePointsRef.current.length > 1 && tool !== 'eraser' && tool !== 'selector') {
-            const newStroke: InkStroke = {
-              id: 'stroke-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
-              points: [...activePointsRef.current],
-              color,
-              size,
-              tool,
-              pageIndex,
-              timestamp: Date.now(),
-            };
-            onChangeStrokes([...strokes, newStroke]);
-          }
-          isDrawingRef.current = false;
-          activePointsRef.current = [];
-          activeLassoRef.current = [];
-          isDraggingSelectionRef.current = false;
-          dragDeltaRef.current = { dx: 0, dy: 0 };
-          scheduleRender();
-        }}
-        className="w-full h-full block cursor-crosshair touch-none"
+        className="w-full h-full block cursor-crosshair touch-none select-none"
         style={{ touchAction: 'none' }}
       />
 

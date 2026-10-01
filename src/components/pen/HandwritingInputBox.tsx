@@ -236,29 +236,17 @@ export const HandwritingInputBox: React.FC<HandwritingInputBoxProps> = ({
     renderCanvas();
   }, [updateBackgroundBuffer, renderCanvas]);
 
-  // CRITICAL: Same touch event prevention as PenCanvas — required for Android WebView
+  // Native contextmenu prevention
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const preventTouch = (e: TouchEvent) => {
-      if (e.cancelable) {
-        e.preventDefault();
-      }
-    };
     const preventContext = (e: MouseEvent) => {
       e.preventDefault();
     };
 
-    canvas.addEventListener('touchstart', preventTouch, { passive: false });
-    canvas.addEventListener('touchmove', preventTouch, { passive: false });
-    canvas.addEventListener('touchend', preventTouch, { passive: false });
     canvas.addEventListener('contextmenu', preventContext);
-
     return () => {
-      canvas.removeEventListener('touchstart', preventTouch);
-      canvas.removeEventListener('touchmove', preventTouch);
-      canvas.removeEventListener('touchend', preventTouch);
       canvas.removeEventListener('contextmenu', preventContext);
     };
   }, []);
