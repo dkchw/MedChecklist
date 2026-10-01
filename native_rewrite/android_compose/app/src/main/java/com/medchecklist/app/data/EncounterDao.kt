@@ -5,27 +5,27 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface EncounterDao {
-    @Query("SELECT * FROM encounters WHERE isDeleted = 0 ORDER BY lastUpdated DESC")
+    @Query("SELECT * FROM encounters WHERE isDeleted = 0 ORDER BY isPinned DESC, updatedAt DESC")
     fun getAllActiveEncounters(): Flow<List<PatientEncounter>>
+
+    @Query("SELECT * FROM encounters WHERE isDeleted = 0 AND status = 'archived' ORDER BY updatedAt DESC")
+    fun getArchivedEncounters(): Flow<List<PatientEncounter>>
+
+    @Query("SELECT * FROM encounters WHERE id = :id LIMIT 1")
+    fun getEncounterById(id: String): Flow<PatientEncounter?>
+
+    @Query("SELECT * FROM encounters WHERE id = :id LIMIT 1")
+    suspend fun getEncounterDirect(id: String): PatientEncounter?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEncounter(encounter: PatientEncounter)
 
     @Update
     suspend fun updateEncounter(encounter: PatientEncounter)
-}
 
-@Dao
-interface InkStrokeDao {
-    @Query("SELECT * FROM ink_strokes WHERE encounterId = :encounterId AND pageIndex = :pageIndex")
-    fun getStrokesForPage(encounterId: String, pageIndex: Int): Flow<List<InkStroke>>
+    @Query("UPDATE encounters SET isDeleted = 1, updatedAt = :timestamp WHERE id = :id")
+    suspend fun softDeleteEncounter(id: String, timestamp: Long = System.currentTimeMillis())
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertStroke(stroke: InkStroke)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertStrokes(strokes: List<InkStroke>)
-
-    @Query("DELETE FROM ink_strokes WHERE encounterId = :encounterId AND id IN (:strokeIds)")
-    suspend fun deleteStrokes(encounterId: String, strokeIds: List<String>)
+    @Query("DELETE FROM encounters WHERE id = :id")
+    suspend fun hardDeleteEncounter(id: String)
 }

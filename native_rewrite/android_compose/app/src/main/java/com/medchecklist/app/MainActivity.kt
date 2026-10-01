@@ -1,87 +1,94 @@
 package com.medchecklist.app
 
 import android.os.Bundle
-import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.medchecklist.app.ui.BedsideInkingScreen
+import com.medchecklist.app.ui.EncounterListScreen
+import com.medchecklist.app.ui.EncounterViewModel
+import com.medchecklist.app.ui.InkingViewModel
 
 class MainActivity : ComponentActivity() {
+    private val encounterViewModel: EncounterViewModel by viewModels()
+    private val inkingViewModel: InkingViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MedChecklistApp()
+            MaterialTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    MedChecklistApp(
+                        encounterViewModel = encounterViewModel,
+                        inkingViewModel = inkingViewModel
+                    )
+                }
+            }
         }
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun MedChecklistApp() {
-    // A simple proof-of-concept Native Compose Canvas for Bedside Inking
-    val paths = remember { mutableStateListOf<Path>() }
-    var currentPath by remember { mutableStateOf<Path?>(null) }
+fun MedChecklistApp(
+    encounterViewModel: EncounterViewModel,
+    inkingViewModel: InkingViewModel
+) {
+    val encounters by encounterViewModel.encounters.collectAsStateWithLifecycle()
+    val templates by encounterViewModel.templates.collectAsStateWithLifecycle()
+    val selectedId by encounterViewModel.selectedEncounterId.collectAsStateWithLifecycle()
 
-    Canvas(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-            .pointerInteropFilter { event ->
-                when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        val path = Path()
-                        path.moveTo(event.x, event.y)
-                        currentPath = path
-                        true
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        // Capture historical coalesced events for smooth digitizer strokes
-                        currentPath?.let { path ->
-                            val historySize = event.historySize
-                            for (i in 0 until historySize) {
-                                path.lineTo(event.getHistoricalX(i), event.getHistoricalY(i))
-                            }
-                            path.lineTo(event.x, event.y)
-                            // Re-assign to trigger recomposition
-                            currentPath = Path().apply { addPath(path) }
-                        }
-                        true
-                    }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        currentPath?.let { path ->
-                            paths.add(path)
-                        }
-                        currentPath = null
-                        true
-                    }
-                    else -> false
-                }
+    val currentEncounter = remember(encounters, selectedId) {
+        encounters.find { it.id == selectedId }
+    }
+
+    LaunchedEffect(currentEncounter?.id) {
+        inkingViewModel.setEncounter(currentEncounter?.id, currentEncounter?.pagesCount ?: 1)
+    }
+
+    if (currentEncounter == null) {
+        EncounterListScreen(
+            encounters = encounters,
+            templates = templates,
+            onSelectEncounter = { encounterViewModel.selectEncounter(it) },
+            onCreateEncounter = { id, bed, fac, grp, cc, tmpl ->
+                encounterViewModel.createEncounter(id, bed, fac, grp, cc, tmpl)
+            },
+            onTogglePin = { encounterViewModel.togglePinEncounter(it) }
+        )
+    } else {
+        val strokes by inkingViewModel.pageStrokes.collectAsStateWithLifecycle()
+        val inkingUiState by inkingViewModel.uiState.collectAsStateWithLifecycle()
+
+        BedsideInkingScreen(
+            encounter = currentEncounter,
+            allEncounters = encounters,
+            strokes = strokes,
+            uiState = inkingUiState,
+            onBack = { encounterViewModel.selectEncounter(null) },
+            onSelectPatient = { encounterViewModel.selectEncounter(it) },
+            onCommitStroke = { inkingViewModel.commitStroke(it) },
+            onEraseAt = { inkingViewModel.eraseStrokesAt(it) },
+            onSelectTool = { inkingViewModel.setTool(it) },
+            onSelectColor = { inkingViewModel.setColor(it) },
+            onSelectSize = { inkingViewModel.setSize(it) },
+            onTogglePenOnlyMode = { inkingViewModel.togglePenOnlyMode() },
+            onUndo = { inkingViewModel.undo() },
+            onRedo = { inkingViewModel.redo() },
+            onClear = { inkingViewModel.clearPage() },
+            onSetPageIndex = { inkingViewModel.setPageIndex(it) },
+            onAddPage = { inkingViewModel.addPage() },
+            onToggleChecklistItem = { chkId, secId, itemId ->
+                encounterViewModel.toggleChecklistItem(currentEncounter, chkId, secId, itemId)
             }
-    ) {
-        // Draw committed strokes
-        for (path in paths) {
-            drawPath(
-                path = path,
-                color = Color.Black,
-                style = Stroke(width = 5f)
-            )
-        }
-        // Draw active stroke
-        currentPath?.let { path ->
-            drawPath(
-                path = path,
-                color = Color.Blue,
-                style = Stroke(width = 5f)
-            )
-        }
+        )
     }
 }
