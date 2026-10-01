@@ -36,25 +36,41 @@ export function pointsToSvgPath(
     return [p.x, p.y, pres];
   });
 
-  const outline = getStroke(points, {
-    size: tool === 'highlighter' ? size * 2.2 : size,
-    thinning: tool === 'highlighter' ? 0 : 0.6,
-    smoothing: 0.72,
-    streamline: 0.58,
-    simulatePressure: !hasHardwarePressure,
-    start: {
-      taper: tool === 'highlighter' ? 0 : size * 0.4,
-      cap: true,
-    },
-    end: {
-      taper: tool === 'highlighter' ? 0 : size * 0.4,
-      cap: true,
-    },
-  });
+  let outline: number[][] = [];
+  try {
+    outline = getStroke(points, {
+      size: tool === 'highlighter' ? size * 2.2 : size,
+      thinning: tool === 'highlighter' ? 0 : 0.6,
+      smoothing: 0.72,
+      streamline: 0.58,
+      simulatePressure: !hasHardwarePressure,
+      start: {
+        taper: tool === 'highlighter' ? 0 : size * 0.4,
+        cap: true,
+      },
+      end: {
+        taper: tool === 'highlighter' ? 0 : size * 0.4,
+        cap: true,
+      },
+    });
+  } catch (err) {
+    console.warn('perfect-freehand getStroke failed, using fallback path:', err);
+  }
 
-  if (!outline.length) return '';
+  if (!outline || !outline.length) {
+    // Fallback: simple polyline with stroke-width
+    const validPoints = points.filter(p => !isNaN(p[0]) && !isNaN(p[1]));
+    if (!validPoints.length) return '';
+    const d = validPoints.map((p, i) => (i === 0 ? `M ${p[0]} ${p[1]}` : `L ${p[0]} ${p[1]}`)).join(' ');
+    return d ? `${d}` : '';
+  }
 
-  return getSvgPathFromStroke(outline);
+  const svgPath = getSvgPathFromStroke(outline);
+  if (svgPath.includes('NaN')) {
+    console.error('SVG Path contains NaN:', svgPath);
+    return '';
+  }
+  return svgPath;
 }
 
 export function strokeToSvgPath(stroke: InkStroke): string {

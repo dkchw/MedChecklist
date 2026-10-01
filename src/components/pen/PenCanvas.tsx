@@ -195,9 +195,14 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     }
 
     // Capture coalesced events if available for high-rate 120Hz/240Hz digitizers
-    const coalescedEvents = (e.nativeEvent as any).getCoalescedEvents
+    let coalescedEvents = (e.nativeEvent as any).getCoalescedEvents
       ? (e.nativeEvent as any).getCoalescedEvents()
       : [e];
+      
+    // Android WebView bug: getCoalescedEvents() exists but sometimes returns an empty array!
+    if (!coalescedEvents || coalescedEvents.length === 0) {
+      coalescedEvents = [e];
+    }
 
     const isEraser = tool === 'eraser' || isPenEraserActive(e);
 
@@ -378,6 +383,8 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     <div className={wrapperClass} style={{ touchAction: 'none' }}>
       <svg
         ref={svgRef}
+        width="100%"
+        height="100%"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
