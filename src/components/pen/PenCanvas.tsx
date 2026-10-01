@@ -195,11 +195,16 @@ export const PenCanvas: React.FC<PenCanvasProps> = ({
     }
 
     // Capture coalesced events if available for high-rate 120Hz/240Hz digitizers
-    let coalescedEvents = (e.nativeEvent as any).getCoalescedEvents
-      ? (e.nativeEvent as any).getCoalescedEvents()
-      : [e];
+    let coalescedEvents: any[] = [e];
+    try {
+      if ((e.nativeEvent as any).getCoalescedEvents) {
+        coalescedEvents = (e.nativeEvent as any).getCoalescedEvents();
+      }
+    } catch (err) {
+      console.warn('getCoalescedEvents failed:', err);
+    }
       
-    // Android WebView bug: getCoalescedEvents() exists but sometimes returns an empty array!
+    // Android WebView bug: getCoalescedEvents() exists but sometimes returns an empty array or throws!
     if (!coalescedEvents || coalescedEvents.length === 0) {
       coalescedEvents = [e];
     }

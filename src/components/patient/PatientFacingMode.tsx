@@ -3,6 +3,7 @@ import { PatientEncounter, EncounterChecklistInstance } from '../../types/patien
 import { InkStroke, PenTool } from '../../types/ink';
 import { PenCanvas } from '../pen/PenCanvas';
 import { PenToolbar } from '../pen/PenToolbar';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 import { jsPDF } from 'jspdf';
 import {
   PenTool as PenToolIcon,
@@ -139,7 +140,8 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
     }
   }, [isDark]);
 
-  const strokes = encounter.inkStrokes || [];
+  // Safely ensure strokes is ALWAYS an array, even if corrupted in IndexedDB
+  const strokes = Array.isArray(encounter.inkStrokes) ? encounter.inkStrokes : [];
 
   const handleUpdateStrokes = (newStrokes: InkStroke[]) => {
     setUndoStack((prev) => [...prev, strokes]);
@@ -798,19 +800,21 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
           </div>
 
           {/* Full Screen Stylus & Pen Canvas */}
-          <PenCanvas
-            strokes={strokes}
-            onChangeStrokes={handleUpdateStrokes}
-            tool={currentTool}
-            color={currentColor}
-            size={currentSize}
-            pageIndex={currentPageIndex}
-            panX={panX}
-            panY={panY}
-            zoom={zoom}
-            penOnlyMode={penOnlyMode}
-            className="absolute inset-0 z-10 w-full h-full pointer-events-auto"
-          />
+          <ErrorBoundary>
+            <PenCanvas
+              strokes={strokes}
+              onChangeStrokes={handleUpdateStrokes}
+              tool={currentTool}
+              color={currentColor}
+              size={currentSize}
+              pageIndex={currentPageIndex}
+              panX={panX}
+              panY={panY}
+              zoom={zoom}
+              penOnlyMode={penOnlyMode}
+              className="absolute inset-0 z-10 w-full h-full pointer-events-auto"
+            />
+          </ErrorBoundary>
 
           {/* Bottom Inking Info Pill */}
           <div className="absolute bottom-4 left-4 z-20 pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/90 dark:border-slate-800 text-[11px] font-mono text-slate-700 dark:text-slate-300 shadow-sm">
@@ -847,19 +851,21 @@ export const PatientFacingMode: React.FC<PatientFacingModeProps> = ({
           >
             {/* Transparent Stylus Inking Overlay */}
             {isPenMode && (
-              <PenCanvas
-                strokes={strokes}
-                onChangeStrokes={handleUpdateStrokes}
-                tool={currentTool}
-                color={currentColor}
-                size={currentSize}
-                pageIndex={currentPageIndex}
-                panX={0}
-                panY={0}
-                zoom={1}
-                penOnlyMode={penOnlyMode}
-                className="absolute inset-0 z-20 pointer-events-auto"
-              />
+              <ErrorBoundary>
+                <PenCanvas
+                  strokes={strokes}
+                  onChangeStrokes={handleUpdateStrokes}
+                  tool={currentTool}
+                  color={currentColor}
+                  size={currentSize}
+                  pageIndex={currentPageIndex}
+                  panX={0}
+                  panY={0}
+                  zoom={1}
+                  penOnlyMode={penOnlyMode}
+                  className="absolute inset-0 z-20 pointer-events-auto"
+                />
+              </ErrorBoundary>
             )}
 
           {/* Base Document Layer: Selectable Text & Numbers */}
